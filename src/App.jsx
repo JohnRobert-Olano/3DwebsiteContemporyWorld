@@ -1,31 +1,19 @@
-import React, { Suspense, useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
-import Experience from './Experience';
-import Overlay from './Overlay';
+import { Suspense } from 'react';
+import CanvasContainer from './components/CanvasContainer';
+import DomOverlay from './components/DomOverlay';
+import LoadingScreen from './components/LoadingScreen';
 
 function App() {
-  const modelRef = useRef();
-  
   return (
-    <div className="w-full bg-primary text-dark font-sans relative">
-      {/* 3D Canvas Layer - Fixed Background */}
-      <div className="fixed top-0 left-0 w-full h-[100vh] z-0 pointer-events-none">
-        <Canvas
-          camera={{ position: [0, 0, 5], fov: 45 }}
-          dpr={[1, 2]}
-        >
-          <Suspense fallback={null}>
-            {/* The modelRef is passed down to be controlled by GSAP */}
-            <Experience ref={modelRef} />
-          </Suspense>
-        </Canvas>
-      </div>
+    <main className="relative w-full min-h-screen bg-[var(--color-dark)] text-white overflow-x-hidden">
+      {/* 3D Canvas Layer */}
+      <Suspense fallback={<LoadingScreen />}>
+        <CanvasContainer />
+      </Suspense>
 
-      {/* HTML / Scroll Layer */}
-      <div className="relative z-10 w-full pointer-events-none">
-        <Overlay modelRef={modelRef} />
-      </div>
-    </div>
+      {/* GSAP DOM Scrollytelling Layer */}
+      <DomOverlay />
+    </main>
   );
 }
 
