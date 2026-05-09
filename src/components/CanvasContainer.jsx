@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Suspense, useRef, useEffect } from 'react';
 import { Environment, Icosahedron, MeshDistortMaterial, Float } from '@react-three/drei';
 import { gsap } from 'gsap';
@@ -10,7 +10,6 @@ gsap.registerPlugin(ScrollTrigger);
 function Scene() {
   const meshRef = useRef();
   const materialRef = useRef();
-  const { camera } = useThree();
 
   useEffect(() => {
     // ScrollTriggers mapped to the DOM sections
