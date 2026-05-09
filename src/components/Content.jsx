@@ -130,7 +130,7 @@ export default function Content() {
         ))}
       </div>
 
-      {sections.map((sec, index) => {
+      {sections.map((sec) => {
         return (
           <section id={sec.id} key={sec.id} className="panel-section h-screen w-full flex flex-col justify-center items-start pl-12">
             {/* Safe-Zone Layout: Anchored to the left with padding, restricted to 40vw to avoid the 3D Earth */}
