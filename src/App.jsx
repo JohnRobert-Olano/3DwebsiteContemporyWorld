@@ -1,6 +1,6 @@
 import { Suspense, useEffect } from 'react';
 import Lenis from 'lenis';
-import Scene from './components/Scene';
+import MapboxEarth from './components/MapboxEarth';
 import Content from './components/Content';
 import LoadingScreen from './components/LoadingScreen';
 
@@ -32,7 +32,7 @@ function App() {
 
   return (
     <main className="relative w-full min-h-screen bg-[#080808] text-white overflow-x-hidden font-sans">
-      
+
       {/* Navbar (Cosmos Glassmorphism) */}
       <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto" aria-label="Primary navigation">
         <div className="glass px-5 py-3 rounded-full border border-white/10 bg-white/5 backdrop-blur-xl flex items-center gap-5 shadow-2xl sm:px-8 sm:gap-8">
@@ -48,7 +48,7 @@ function App() {
 
       {/* Immersive 3D Earth Layer (Fixed Background) */}
       <Suspense fallback={<LoadingScreen />}>
-        <Scene />
+        <MapboxEarth />
       </Suspense>
 
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}

@@ -407,6 +407,7 @@ function Earth() {
             <sphereGeometry args={[2.04, 128, 128]} />
             <primitive object={haloMaterial} attach="material" />
           </mesh>
+
         </group>
       </group>
     </group>
@@ -424,10 +425,10 @@ export default function Scene() {
         <Suspense fallback={null}>
           {/* Deep Space Environment */}
           <Stars radius={100} depth={50} count={10000} factor={4} saturation={0} fade speed={1} />
-          
+
           {/* Front-left sunlight for the bright satellite-render look. */}
           <directionalLight position={[-5, 3, 8]} intensity={2.6} color="#ffffff" />
-          
+
           <Earth />
         </Suspense>
       </Canvas>
