@@ -7,35 +7,95 @@ gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
 const sections = [
   {
-    id: "sec-1",
-    title: "Culture",
-    subTitle: "The Global Village",
-    content: "Culture in the context of globalization refers to the movement and mixing of ideas, values, art, language, food, and lifestyle across national borders. It is the process by which people adopt, adapt, and exchange cultural expressions beyond their own society. Examples include the global spread of K-pop music, the worldwide popularity of Japanese anime, the dominance of Hollywood films, or the fact that English has become the default language of international business and academia. Globalization doesn't simply erase cultures — it blends them, creating new hybrid identities that are simultaneously local and global."
+    id: 'culture',
+    navLabel: 'Culture',
+    title: 'Culture',
+    subTitle: 'The Global Village',
+    summary: 'Culture moves through music, language, food, art, film, and daily habits. Globalization lets people adopt, adapt, and exchange cultural expression beyond their own society.',
+    points: [
+      {
+        label: 'Exchange',
+        text: 'Ideas and styles travel across borders through media, migration, education, and commerce.',
+      },
+      {
+        label: 'Hybrid identity',
+        text: 'Local culture is not simply erased; it often blends with global influences into new forms.',
+      },
+    ],
+    example: 'K-pop, Japanese anime, Hollywood films, and English as a common business language all show culture becoming both local and global.',
   },
   {
-    id: "sec-2",
-    title: "Economy",
-    subTitle: "The Engine",
-    content: "Economic globalization refers to the integration of national economies through trade, investment, supply chains, and financial markets into a single, interdependent global system. It is driven by transnational corporations (TNCs), free trade agreements, and foreign direct investment (FDI). Examples include a car assembled in Germany using steel from Brazil, microchips from Taiwan, and rubber from Malaysia — or a Filipino call center worker serving customers in the United States. The global economy means that a recession in one major country, a blocked shipping canal, or a new tariff policy can ripple across dozens of nations almost immediately."
+    id: 'economy',
+    navLabel: 'Economy',
+    title: 'Economy',
+    subTitle: 'The Engine',
+    summary: 'Economic globalization links national economies through trade, investment, supply chains, and financial markets into one interdependent system.',
+    points: [
+      {
+        label: 'Drivers',
+        text: 'Transnational corporations, free trade agreements, and foreign direct investment connect production and capital.',
+      },
+      {
+        label: 'Ripple effects',
+        text: 'A recession, shipping disruption, or tariff policy can spread quickly across many countries.',
+      },
+    ],
+    example: 'A car assembled in Germany may rely on Brazilian steel, Taiwanese microchips, Malaysian rubber, and global logistics.',
   },
   {
-    id: "sec-3",
-    title: "Environment",
-    subTitle: "The Shared Home",
-    content: "Environmental globalization refers to the reality that ecological systems — air, oceans, climate, and biodiversity — do not respect national borders, making environmental challenges inherently global problems that require global solutions. It encompasses climate change, deforestation, ocean pollution, and the cross-border movement of environmental harm. For example, carbon emissions produced in industrialized nations raise sea levels that threaten Pacific Island communities, and plastic waste from one continent washes onto the beaches of another. The environment is the clearest proof that globalization is not just an economic or political phenomenon — it is a shared condition of human survival."
+    id: 'environment',
+    navLabel: 'Environment',
+    title: 'Environment',
+    subTitle: 'The Shared Home',
+    summary: 'Environmental globalization shows that air, oceans, climate, and biodiversity ignore political borders, making ecological problems shared problems.',
+    points: [
+      {
+        label: 'Shared systems',
+        text: 'Climate change, deforestation, pollution, and biodiversity loss move through connected natural systems.',
+      },
+      {
+        label: 'Shared responsibility',
+        text: 'Solutions require cooperation because environmental harm often crosses the border where it began.',
+      },
+    ],
+    example: 'Carbon emissions in industrialized countries can raise sea levels that threaten Pacific Island communities.',
   },
   {
-    id: "sec-4",
-    title: "Politics",
-    subTitle: "The Rules of the Game",
-    content: "Political globalization refers to the development of international institutions, treaties, and agreements that govern how nations interact, cooperate, and resolve disputes. It includes bodies like the United Nations (UN), the World Trade Organization (WTO), and the International Monetary Fund (IMF), which set the rules for diplomacy, trade, and economic conduct. Examples include the Paris Climate Agreement, UN peacekeeping missions, or WTO trade dispute rulings between major economies. Essentially, political globalization is the attempt to manage a deeply interconnected world through shared rules — even when nations fundamentally disagree."
+    id: 'politics',
+    navLabel: 'Politics',
+    title: 'Politics',
+    subTitle: 'The Rules of the Game',
+    summary: 'Political globalization creates institutions, treaties, and agreements for cooperation, negotiation, and dispute resolution.',
+    points: [
+      {
+        label: 'Institutions',
+        text: 'The UN, WTO, and IMF shape diplomacy, trade rules, financial stability, and international cooperation.',
+      },
+      {
+        label: 'Tension',
+        text: 'Shared rules matter most when nations are connected but still disagree about power, priorities, and values.',
+      },
+    ],
+    example: 'The Paris Climate Agreement, UN peacekeeping missions, and WTO trade rulings are all political globalization in action.',
   },
   {
-    id: "sec-5",
-    title: "Technology",
-    subTitle: "The Nervous System",
-    content: "Technology refers to the tools, networks, and digital systems that connect the world and enable the near-instant flow of information, goods, and services across borders. It includes the internet, smartphones, artificial intelligence, and the physical infrastructure — like undersea cables and satellites — that keeps the global system running. For example, a video call between a student in the Philippines and a professor in the UK, or a payment sent from a worker abroad to their family back home in seconds, are both everyday acts of technological globalization. Without this sector, none of the others could function at their current speed or scale."
-  }
+    id: 'technology',
+    navLabel: 'Technology',
+    title: 'Technology',
+    subTitle: 'The Nervous System',
+    summary: 'Technology provides the networks and tools that let information, money, goods, services, and people coordinate across distance almost instantly.',
+    points: [
+      {
+        label: 'Infrastructure',
+        text: 'Internet platforms, smartphones, AI, satellites, and undersea cables keep global systems connected.',
+      },
+      {
+        label: 'Acceleration',
+        text: 'Technology increases the speed and scale of cultural, economic, political, and environmental change.',
+      },
+    ],
+    example: 'A video call across continents or an instant remittance payment are everyday examples of technological globalization.',
+  },
 ];
 
 export default function Content() {
@@ -45,59 +105,55 @@ export default function Content() {
   useEffect(() => {
     const ctx = gsap.context(() => {
       const panels = gsap.utils.toArray('.panel-section');
-      
+
       panels.forEach((panel, i) => {
-        // Track active section for sidebar
         ScrollTrigger.create({
           trigger: panel,
-          start: "top center",
-          end: "bottom center",
+          start: 'top center',
+          end: 'bottom center',
           onEnter: () => setActiveSection(i),
           onEnterBack: () => setActiveSection(i),
         });
 
-        // Pin the panel wrapper to keep it on screen with +350% VH breathing room
         ScrollTrigger.create({
           trigger: panel,
-          start: "top top",
-          end: "+=350%", 
+          start: 'top top',
+          end: '+=350%',
           pin: true,
           pinSpacing: true,
         });
 
-        // Strict Fade-in and Slide-up logic inside the 300% pin.
         const elements = panel.querySelectorAll('.anim-element');
-        
-        gsap.fromTo(elements, 
+
+        gsap.fromTo(
+          elements,
           { opacity: 0, y: 30 },
-          { 
-            opacity: 1, 
-            y: 0, 
-            ease: "power2.out",
+          {
+            opacity: 1,
+            y: 0,
+            ease: 'power2.out',
             stagger: 0.15,
             scrollTrigger: {
               trigger: panel,
-              start: "top top",
-              end: "+=50%",
+              start: 'top bottom',
+              end: 'top top',
               scrub: 1,
-            }
-          }
+            },
+          },
         );
 
-        // Fade out before the pin ends
         gsap.to(elements, {
           opacity: 0,
           y: -30,
-          ease: "power2.in",
+          ease: 'power2.in',
           stagger: 0.1,
           scrollTrigger: {
             trigger: panel,
-            start: "+=300%", // start fading out near the end of the 350% pin
-            end: "+=350%",
+            start: '+=300%',
+            end: '+=350%',
             scrub: 1,
-          }
+          },
         });
-
       });
     }, containerRef);
 
@@ -106,49 +162,114 @@ export default function Content() {
 
   const scrollTo = (index) => {
     const panels = document.querySelectorAll('.panel-section');
+
     if (panels[index]) {
-      const trigger = ScrollTrigger.getAll().find(t => t.pin === panels[index]);
+      const trigger = ScrollTrigger.getAll().find((t) => t.pin === panels[index]);
       const targetPos = trigger ? trigger.start : panels[index].offsetTop;
-      gsap.to(window, { duration: 1.5, scrollTo: targetPos, ease: "power3.inOut" });
+      gsap.to(window, { duration: 1.5, scrollTo: targetPos, ease: 'power3.inOut' });
     }
   };
 
   return (
     <div ref={containerRef} className="main-scroller relative z-10 w-full pointer-events-none font-sans">
-      
-      {/* Sidebar Dot Navigation */}
-      <div className="fixed right-8 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-5 pointer-events-auto">
+      <nav
+        className="fixed right-5 top-1/2 z-50 hidden w-48 -translate-y-1/2 flex-col gap-2 pointer-events-auto lg:flex"
+        aria-label="Section navigation"
+      >
         {sections.map((sec, i) => (
           <button
             key={sec.id}
             onClick={() => scrollTo(i)}
-            className={`w-3 h-3 rounded-full transition-all duration-500 border border-white/50 ${
-              activeSection === i ? 'bg-white scale-150' : 'bg-transparent hover:bg-white/30'
+            className={`grid grid-cols-[2rem_1fr] items-center gap-3 rounded-lg border px-3 py-2 text-left text-xs uppercase tracking-[0.16em] transition-colors duration-200 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3] ${
+              activeSection === i
+                ? 'border-[#0A6ED3]/70 bg-[#0A6ED3]/20 text-white'
+                : 'border-white/10 bg-black/35 text-gray-400 hover:border-white/30 hover:bg-white/10 hover:text-white'
             }`}
+            aria-current={activeSection === i ? 'step' : undefined}
             aria-label={`Jump to ${sec.title}`}
-          />
+          >
+            <span className="text-[0.65rem] text-[#7DB7F0]">{String(i + 1).padStart(2, '0')}</span>
+            <span className="truncate">{sec.navLabel}</span>
+          </button>
         ))}
-      </div>
+      </nav>
 
-      {sections.map((sec) => {
+      <nav
+        className="fixed bottom-4 left-4 right-4 z-50 flex gap-2 overflow-x-auto rounded-lg border border-white/10 bg-black/70 p-2 backdrop-blur-xl pointer-events-auto lg:hidden"
+        aria-label="Mobile section navigation"
+      >
+        {sections.map((sec, i) => (
+          <button
+            key={sec.id}
+            onClick={() => scrollTo(i)}
+            className={`min-w-max rounded-md border px-3 py-2 text-xs uppercase tracking-[0.14em] transition-colors duration-200 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3] ${
+              activeSection === i
+                ? 'border-[#0A6ED3]/70 bg-[#0A6ED3]/20 text-white'
+                : 'border-white/10 bg-white/5 text-gray-400'
+            }`}
+            aria-current={activeSection === i ? 'step' : undefined}
+            aria-label={`Jump to ${sec.title}`}
+          >
+            {String(i + 1).padStart(2, '0')} {sec.navLabel}
+          </button>
+        ))}
+      </nav>
+
+      {sections.map((sec, index) => {
+        const panelPosition = index % 2 === 0
+          ? 'md:justify-end md:pr-[8vw] lg:pr-64'
+          : 'md:justify-start md:pl-[8vw]';
+
         return (
-          <section id={sec.id} key={sec.id} className="panel-section h-screen w-full flex flex-col justify-center items-start pl-12">
-            {/* Safe-Zone Layout: Anchored to the left with padding, restricted to 40vw to avoid the 3D Earth */}
-            <div className="card-content pointer-events-auto bg-black/40 backdrop-blur-md border border-[#0A6ED3]/30 p-8 md:p-10 rounded-3xl w-full max-w-[40vw] xl:max-w-xl shadow-2xl">
-              <h2 className="anim-element font-sans text-4xl md:text-6xl text-white font-bold mb-2 uppercase tracking-tight leading-none drop-shadow-lg">
+          <section
+            id={sec.id}
+            key={sec.id}
+            className={`panel-section min-h-screen w-full overflow-hidden flex items-start justify-start px-4 pb-28 pt-28 sm:px-8 md:items-center md:pt-32 lg:pb-20 ${panelPosition}`}
+            aria-labelledby={`${sec.id}-title`}
+          >
+            <article className="card-content pointer-events-auto box-border w-full max-w-[22rem] rounded-lg border border-[#0A6ED3]/30 bg-black/55 p-5 shadow-2xl backdrop-blur-md sm:max-w-xl sm:p-8 md:p-10">
+              <div className="anim-element mb-4 flex flex-wrap items-center gap-3 sm:mb-5">
+                <span className="rounded-md border border-[#0A6ED3]/50 bg-[#0A6ED3]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+                  Section {String(index + 1).padStart(2, '0')}
+                </span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                  {sec.subTitle}
+                </span>
+              </div>
+
+              <h2
+                id={`${sec.id}-title`}
+                className="anim-element font-sans text-3xl font-bold uppercase leading-none tracking-normal text-white drop-shadow-lg sm:text-5xl md:text-6xl"
+              >
                 {sec.title}
               </h2>
-              {sec.subTitle && (
-                <h3 
-                  className="anim-element font-sans text-xl md:text-2xl text-[#0A6ED3] font-semibold mb-6 drop-shadow-md"
-                >
-                  {sec.subTitle}
-                </h3>
-              )}
-              <div className="anim-element text-base md:text-lg text-gray-300 font-serif whitespace-pre-line leading-relaxed drop-shadow-sm">
-                {sec.content}
+
+              <p className="anim-element mt-4 max-w-prose break-words text-sm leading-6 text-gray-200 drop-shadow-sm sm:mt-5 md:text-lg md:leading-7">
+                {sec.summary}
+              </p>
+
+              <div className="anim-element mt-6 grid gap-4 border-t border-white/10 pt-5 sm:mt-8 sm:grid-cols-2 sm:gap-5 sm:pt-6">
+                {sec.points.map((point) => (
+                  <div key={point.label}>
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+                      {point.label}
+                    </h3>
+                    <p className="mt-2 break-words text-sm leading-6 text-gray-300">
+                      {point.text}
+                    </p>
+                  </div>
+                ))}
               </div>
-            </div>
+
+              <div className="anim-element mt-5 border-t border-white/10 pt-4 sm:mt-6 sm:pt-5">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                  In practice
+                </h3>
+                <p className="mt-2 break-words text-sm leading-6 text-gray-300">
+                  {sec.example}
+                </p>
+              </div>
+            </article>
           </section>
         );
       })}

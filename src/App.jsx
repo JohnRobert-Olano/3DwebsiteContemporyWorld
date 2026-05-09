@@ -34,10 +34,15 @@ function App() {
     <main className="relative w-full min-h-screen bg-[#080808] text-white overflow-x-hidden font-sans">
       
       {/* Navbar (Cosmos Glassmorphism) */}
-      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
-        <div className="glass px-8 py-3 rounded-full border border-white/10 bg-white/5 backdrop-blur-xl flex items-center gap-8 shadow-2xl">
+      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto" aria-label="Primary navigation">
+        <div className="glass px-5 py-3 rounded-full border border-white/10 bg-white/5 backdrop-blur-xl flex items-center gap-5 shadow-2xl sm:px-8 sm:gap-8">
           <span className="text-xs uppercase tracking-widest font-bold text-white">Global Cosmos</span>
-          <span className="text-xs uppercase tracking-widest text-gray-400 hover:text-white transition-colors cursor-pointer">Explore</span>
+          <a
+            href="#culture"
+            className="text-xs uppercase tracking-widest text-gray-400 hover:text-white focus-visible:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0A6ED3] transition-colors cursor-pointer"
+          >
+            Explore sections
+          </a>
         </div>
       </nav>
 
