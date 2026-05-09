@@ -9,17 +9,20 @@ gsap.registerPlugin(ScrollTrigger);
 
 // Custom Earth Shader for Photorealistic Day/Night & Interactive Flashlight
 const earthVertexShader = `
+  uniform sampler2D topologyMap;
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vWorldPosition;
 
   void main() {
     vUv = uv;
-    // Calculate normal in world space to compare with sun direction.
     vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
 
-    // Calculate world position of the vertex for cursor distance tracking
-    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    // Displacement Mapping: use real-world GIS data
+    float elevation = texture2D(topologyMap, vUv).r;
+    vec3 displacedPosition = position + normal * (elevation * 0.08);
+
+    vec4 worldPos = modelMatrix * vec4(displacedPosition, 1.0);
     vWorldPosition = worldPos.xyz;
 
     gl_Position = projectionMatrix * viewMatrix * worldPos;
@@ -28,9 +31,7 @@ const earthVertexShader = `
 
 const earthFragmentShader = `
   uniform sampler2D dayMap;
-  uniform sampler2D nightMap;
   uniform sampler2D specularMap;
-  uniform vec3 sunDirection;
   uniform vec3 hoverPosition;
   uniform float hoverRadius;
 
@@ -41,45 +42,37 @@ const earthFragmentShader = `
   void main() {
     vec3 normal = normalize(vNormal);
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-    float sunLight = dot(normal, normalize(sunDirection));
 
-    // Soft, photographic day/night falloff like satellite Earth renders.
-    float dayFactor = smoothstep(-0.5, 0.18, sunLight);
-    float duskFactor = smoothstep(-0.45, 0.18, sunLight);
-
-    // 2. Interactive Flashlight (Cursor Tracking)
-    float dist = distance(vWorldPosition, hoverPosition);
-    // Creates a sharp spot that fades slightly at the very edge
-    float hoverFactor = 1.0 - smoothstep(hoverRadius * 0.8, hoverRadius, dist);
-
-    // 3. Final Day logic (It is daytime IF the sun hits it OR the user hovers)
-    float finalDayFactor = clamp(dayFactor + hoverFactor, 0.0, 1.0);
-
-    // Sample the high-res textures
     vec4 dayTex = texture2D(dayMap, vUv);
-    vec4 nightTex = texture2D(nightMap, vUv);
     float waterMask = texture2D(specularMap, vUv).r;
 
-    // Brighten the satellite texture and push the palette toward the reference:
-    // deep blue oceans, warmer deserts, richer greens, and clean white clouds.
+    // Fully illuminated base palette
     vec3 dayColor = pow(dayTex.rgb, vec3(0.8)) * 1.38;
     float oceanColor = smoothstep(0.12, 0.55, dayTex.b - max(dayTex.r, dayTex.g) * 0.35);
     float warmLand = smoothstep(0.04, 0.28, dayTex.r - dayTex.b);
     float cloudWhite = smoothstep(0.48, 0.88, max(max(dayTex.r, dayTex.g), dayTex.b));
 
-    dayColor = mix(dayColor, dayColor * vec3(0.8, 1.02, 1.5) + vec3(0.01, 0.04, 0.12), oceanColor * 0.48);
+    // Deep water color #054598 / #04356A mapping
+    dayColor = mix(dayColor, vec3(0.02, 0.21, 0.42), oceanColor * 0.7);
     dayColor = mix(dayColor, dayColor * vec3(1.16, 1.06, 0.88), warmLand * 0.35);
     dayColor = mix(dayColor, vec3(1.0), cloudWhite * 0.18);
 
-    vec3 nightSurface = dayColor * vec3(0.07, 0.12, 0.24);
-    vec3 cityLights = nightTex.rgb * vec3(1.0, 0.72, 0.42) * (1.0 - finalDayFactor) * 1.35;
-    vec3 baseColor = mix(nightSurface + cityLights, dayColor, finalDayFactor);
+    // Luminous Magnifier (Interactive Feature)
+    float dist = distance(vWorldPosition, hoverPosition);
+    float hoverFactor = 1.0 - smoothstep(0.0, hoverRadius, dist); // smoothstep blur
 
+    // Spotlight effect: increase brightness & saturation
+    vec3 highlightColor = dayColor * 1.8;
+    float luma = dot(highlightColor, vec3(0.299, 0.587, 0.114));
+    vec3 saturatedColor = mix(vec3(luma), highlightColor, 1.4);
+    
+    vec3 baseColor = mix(dayColor, saturatedColor, hoverFactor);
+
+    // Atmosphere & Rim
     float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
-    vec3 atmosphere = vec3(0.08, 0.42, 1.0) * rim * (0.18 + duskFactor * 0.42);
-    vec3 oceanGlint = vec3(0.18, 0.44, 0.9) * waterMask * pow(max(sunLight, 0.0), 2.0) * 0.18;
+    vec3 atmosphere = vec3(0.04, 0.43, 0.83) * rim * 0.45;
 
-    gl_FragColor = vec4(baseColor + atmosphere + oceanGlint, 1.0);
+    gl_FragColor = vec4(baseColor + atmosphere, 1.0);
   }
 `;
 
@@ -95,20 +88,22 @@ function Earth() {
   });
 
   // High-Resolution Textures
-  const [dayMap, nightMap, cloudsMap, specularMap] = useTexture([
+  const [dayMap, cloudsMap, specularMap, topologyMap] = useTexture([
     '/earth_day.jpg',
-    '/earth_night.jpg',
     '/earth_clouds.png',
-    '/earth_specular.jpg'
+    '/earth_specular.jpg',
+    '/earth_topology.png'
   ]);
 
   useEffect(() => {
-    [dayMap, nightMap, cloudsMap].forEach((texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = 8;
-      texture.needsUpdate = true;
+    [dayMap, cloudsMap, topologyMap].forEach((texture) => {
+      if(texture) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        texture.needsUpdate = true;
+      }
     });
-  }, [dayMap, nightMap, cloudsMap]);
+  }, [dayMap, cloudsMap, topologyMap]);
 
   // Front-left sunlight gives the globe the same bright satellite-render angle
   // as the reference while leaving a soft night edge on the far side.
@@ -119,16 +114,15 @@ function Earth() {
     return new THREE.ShaderMaterial({
       uniforms: {
         dayMap: { value: dayMap },
-        nightMap: { value: nightMap },
         specularMap: { value: specularMap },
-        sunDirection: { value: sunDirection },
+        topologyMap: { value: topologyMap },
         hoverPosition: { value: new THREE.Vector3(0, 0, 1000) }, // Hidden initially
-        hoverRadius: { value: 0.32 } // Size of a metropolitan area
+        hoverRadius: { value: 0.6 } // Size of magnifier
       },
       vertexShader: earthVertexShader,
       fragmentShader: earthFragmentShader,
     });
-  }, [dayMap, nightMap, specularMap, sunDirection]);
+  }, [dayMap, specularMap, topologyMap]);
 
   // Atmospheric Glow Shader
   const haloMaterial = useMemo(() => {
@@ -152,14 +146,9 @@ function Earth() {
       `,
       fragmentShader: `
         uniform vec3 glowColor;
-        uniform vec3 sunDirection;
         varying float intensity;
-        varying vec3 vNormal;
         void main() {
-          float sunLight = dot(normalize(vNormal), normalize(sunDirection));
-          float dayFactor = smoothstep(-0.35, 0.25, sunLight);
-
-          vec3 finalColor = mix(vec3(0.0, 0.08, 0.42), glowColor, dayFactor);
+          vec3 finalColor = glowColor;
           gl_FragColor = vec4(finalColor, intensity * 0.34);
         }
       `,
@@ -176,21 +165,19 @@ function Earth() {
     motion.spinBoost = THREE.MathUtils.damp(motion.spinBoost, 0, 2.5, delta);
 
     if (tiltRef.current) {
-      const targetX = state.pointer.y * 0.26;
-      const targetY = state.pointer.x * 0.44;
-      const targetZ = state.pointer.x * -0.08;
-      const targetOffsetX = state.pointer.x * 0.12;
-      const targetOffsetY = state.pointer.y * 0.08 + Math.sin(elapsed * 1.15) * 0.05;
+      // Locked 23.5° axial tilt
+      tiltRef.current.rotation.z = 0.41;
+      
+      const targetX = state.pointer.y * 0.1;
+      const targetY = state.pointer.x * 0.1;
 
       tiltRef.current.rotation.x = THREE.MathUtils.damp(tiltRef.current.rotation.x, targetX, 5, delta);
       tiltRef.current.rotation.y = THREE.MathUtils.damp(tiltRef.current.rotation.y, targetY, 5, delta);
-      tiltRef.current.rotation.z = THREE.MathUtils.damp(tiltRef.current.rotation.z, targetZ, 4, delta);
-      tiltRef.current.position.x = THREE.MathUtils.damp(tiltRef.current.position.x, targetOffsetX, 5, delta);
-      tiltRef.current.position.y = THREE.MathUtils.damp(tiltRef.current.position.y, targetOffsetY, 5, delta);
     }
 
     if (spinRef.current) {
-      spinRef.current.rotation.y += delta * (0.24 + motion.spinBoost);
+      // Extremely slow baseline rotation so we don't drift away from targeted regions
+      spinRef.current.rotation.y += delta * (0.02 + motion.spinBoost);
       spinRef.current.rotation.x = Math.sin(elapsed * 0.55) * 0.035;
     }
 
@@ -218,11 +205,11 @@ function Earth() {
     const stage = stageRef.current;
     if (!stage) return undefined;
 
-    gsap.set(stage.position, { x: 0, y: -0.2, z: 0.8 });
-    gsap.set(stage.rotation, { x: -0.12, y: -0.4, z: 0 });
-    gsap.set(stage.scale, { x: 1.18, y: 1.18, z: 1.18 });
+    gsap.set(stage.position, { x: 2.2, y: 0, z: 0.8 });
+    gsap.set(stage.rotation, { x: 0.2, y: Math.PI * 0.7, z: 0 });
+    gsap.set(stage.scale, { x: 1.6, y: 1.6, z: 1.6 });
     if (spinRef.current) {
-      gsap.set(spinRef.current.rotation, { y: 1.65 });
+      gsap.set(spinRef.current.rotation, { y: 0 });
     }
 
     const tl = gsap.timeline({
@@ -241,27 +228,25 @@ function Earth() {
       }
     });
 
-    // Product-showcase style movement: the globe stays hero-sized while each section
-    // gives it a quick turntable shift, similar to the basketball site's center object.
-    tl.to(stage.position, { x: 1.25, y: -0.08, z: 1.25, duration: 1 }, 0)
-      .to(stage.rotation, { x: 0.28, y: Math.PI * 0.55, z: -0.08, duration: 1 }, 0)
-      .to(stage.scale, { x: 1.32, y: 1.32, z: 1.32, duration: 1 }, 0)
+    // Sec 1 -> Sec 2: Economy (SE Asia & Taiwan)
+    tl.to(stage.position, { x: 2.0, y: 0.3, z: 1.0, duration: 1 }, 0)
+      .to(stage.rotation, { x: 0.1, y: Math.PI * 0.85, z: 0, duration: 1 }, 0)
+      .to(stage.scale, { x: 1.8, y: 1.8, z: 1.8, duration: 1 }, 0)
 
-      .to(stage.position, { x: -1.15, y: 0.18, z: 1.05, duration: 1 }, 1)
-      .to(stage.rotation, { x: -0.42, y: Math.PI * 1.25, z: 0.1, duration: 1 }, 1)
-      .to(stage.scale, { x: 1.28, y: 1.28, z: 1.28, duration: 1 }, 1)
+    // Sec 2 -> Sec 3: Environment (Pacific Ocean / Island regions)
+    tl.to(stage.position, { x: 2.5, y: -0.2, z: 1.5, duration: 1 }, 1)
+      .to(stage.rotation, { x: 0.0, y: Math.PI * 1.2, z: 0, duration: 1 }, 1)
+      .to(stage.scale, { x: 1.9, y: 1.9, z: 1.9, duration: 1 }, 1)
 
-      .to(stage.position, { x: 0.05, y: 0.02, z: 1.85, duration: 1 }, 2)
-      .to(stage.rotation, { x: 0.05, y: Math.PI * 2.45, z: 0, duration: 1 }, 2)
-      .to(stage.scale, { x: 1.48, y: 1.48, z: 1.48, duration: 1 }, 2)
+    // Sec 3 -> Sec 4: Politics (Western Europe & North America)
+    tl.to(stage.position, { x: 2.2, y: -0.4, z: 0.8, duration: 1 }, 2)
+      .to(stage.rotation, { x: 0.3, y: Math.PI * 1.9, z: 0, duration: 1 }, 2)
+      .to(stage.scale, { x: 1.5, y: 1.5, z: 1.5, duration: 1 }, 2)
 
-      .to(stage.position, { x: -1.7, y: -0.05, z: 1.15, duration: 1 }, 3)
-      .to(stage.rotation, { x: 0.18, y: Math.PI * 3.2, z: 0.12, duration: 1 }, 3)
-      .to(stage.scale, { x: 1.28, y: 1.28, z: 1.28, duration: 1 }, 3)
-
-      .to(stage.position, { x: 0, y: -0.15, z: 0.45, duration: 1 }, 4)
-      .to(stage.rotation, { x: -0.1, y: Math.PI * 4.05, z: 0, duration: 1 }, 4)
-      .to(stage.scale, { x: 1.1, y: 1.1, z: 1.1, duration: 1 }, 4);
+    // Sec 4 -> Sec 5: Technology (Full global view)
+    tl.to(stage.position, { x: 1.8, y: 0, z: 0, duration: 1 }, 3)
+      .to(stage.rotation, { x: 0.1, y: Math.PI * 2.5, z: 0, duration: 1 }, 3)
+      .to(stage.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 1 }, 3);
 
     return () => tl.kill();
   }, []);
