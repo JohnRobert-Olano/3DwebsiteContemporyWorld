@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useRef, useEffect, useMemo } from 'react';
 import { useTexture, Stars } from '@react-three/drei';
 import { gsap } from 'gsap';
@@ -77,6 +77,7 @@ const earthFragmentShader = `
 `;
 
 function Earth() {
+  const { viewport } = useThree();
   const earthRef = useRef();
   const cloudsRef = useRef();
   const haloRef = useRef();
@@ -92,6 +93,21 @@ function Earth() {
     lastX: 0,
     lastY: 0,
   });
+  const motionProfile = useMemo(() => {
+    const isNarrow = viewport.width < 5.6;
+    const travelX = isNarrow
+      ? THREE.MathUtils.clamp(viewport.width * 0.35, 1.15, 1.75)
+      : THREE.MathUtils.clamp(viewport.width * 0.43, 3.45, 4.15);
+
+    return {
+      leftX: -travelX,
+      rightX: travelX,
+      baseZ: isNarrow ? -0.25 : 0.05,
+      peakZ: isNarrow ? 0.1 : 0.45,
+      baseScale: isNarrow ? 1.18 : 1.58,
+      peakScale: isNarrow ? 1.32 : 1.72,
+    };
+  }, [viewport.width]);
 
   // High-Resolution Textures
   const [dayMap, cloudsMap, specularMap, topologyMap] = useTexture([
@@ -273,13 +289,15 @@ function Earth() {
 
     // How many full left↔right sweeps across the total scroll.
     // Each section gets one half-sweep so the globe alternates sides per section.
-    const leftX  = -2.35;
-    const rightX =  2.35;
     const steadyY = 0.0;
-    const baseZ   = -0.25;
-    const peakZ   =  0.65;
-    const baseScale = 1.22;
-    const peakScale = 1.45;
+    const {
+      leftX,
+      rightX,
+      baseZ,
+      peakZ,
+      baseScale,
+      peakScale,
+    } = motionProfile;
 
     // Continuous triangle-wave: maps 0→1 progress to a value that
     // oscillates 0→1→0→1… exactly `sweeps` half-cycles.
@@ -294,7 +312,7 @@ function Earth() {
       return Math.acos(Math.cos(t)) / Math.PI; // normalized 0→1→0→1…
     };
 
-    const easeInOut = gsap.parseEase("power1.inOut");
+    const easeInOut = gsap.parseEase("sine.inOut");
 
     const setGlobeForProgress = (progress, velocity = 0) => {
       // Clamp progress to avoid any overshoot
@@ -348,7 +366,7 @@ function Earth() {
     return () => {
       sectionMotion.kill();
     };
-  }, []);
+  }, [motionProfile]);
 
   return (
     <group ref={stageRef}>
