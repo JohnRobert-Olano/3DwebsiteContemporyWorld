@@ -93,19 +93,22 @@ function Earth() {
     lastX: 0,
     lastY: 0,
   });
+
+  /* ──────────────────────────────────────────────────────────
+     Ping-Pong motion profile
+     Even sections → Earth LEFT   (position.x = -travelX)
+     Odd  sections → Earth RIGHT  (position.x = +travelX)
+     ────────────────────────────────────────────────────────── */
   const motionProfile = useMemo(() => {
     const isNarrow = viewport.width < 5.6;
     const travelX = isNarrow
       ? THREE.MathUtils.clamp(viewport.width * 0.35, 1.15, 1.75)
-      : THREE.MathUtils.clamp(viewport.width * 0.43, 3.45, 4.15);
+      : THREE.MathUtils.clamp(viewport.width * 0.43, 2.2, 3.0);
 
     return {
       leftX: -travelX,
       rightX: travelX,
-      baseZ: isNarrow ? -0.25 : 0.05,
-      peakZ: isNarrow ? 0.1 : 0.45,
       baseScale: isNarrow ? 1.18 : 1.58,
-      peakScale: isNarrow ? 1.32 : 1.72,
     };
   }, [viewport.width]);
 
@@ -181,6 +184,11 @@ function Earth() {
     });
   }, [sunDirection]);
 
+  /* ──────────────────────────────────────────────────────────
+     useFrame — CONTINUOUS Y-AXIS ROTATION
+     Completely decoupled from ScrollTrigger.
+     Runs every frame regardless of scroll state.
+     ────────────────────────────────────────────────────────── */
   useFrame((state, delta) => {
     const elapsed = state.clock.getElapsedTime();
     const motion = motionRef.current;
@@ -280,91 +288,86 @@ function Earth() {
     }
   };
 
+  /* ──────────────────────────────────────────────────────────
+     ScrollTrigger → Ping-Pong X-Position
+     NO scrub. NO pin. Callback-driven gsap.to() timelines.
+     Each section trigger fires a rapid 0.8s position tween.
+     ────────────────────────────────────────────────────────── */
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return undefined;
 
+    const { leftX, rightX, baseScale } = motionProfile;
+
+    // Initialize: center position
+    stage.position.set(0, 0, 0);
+    stage.scale.set(baseScale, baseScale, baseScale);
+
     const panels = gsap.utils.toArray('.panel-section');
-    const sweeps = Math.max(panels.length, 1);
+    const triggers = [];
 
-    // How many full left↔right sweeps across the total scroll.
-    // Each section gets one half-sweep so the globe alternates sides per section.
-    const steadyY = 0.0;
-    const {
-      leftX,
-      rightX,
-      baseZ,
-      peakZ,
-      baseScale,
-      peakScale,
-    } = motionProfile;
+    panels.forEach((panel, i) => {
+      // Even sections (0,2,4): Earth goes LEFT
+      // Odd  sections (1,3):   Earth goes RIGHT
+      const targetX = i % 2 === 0 ? leftX : rightX;
 
-    // Continuous triangle-wave: maps 0→1 progress to a value that
-    // oscillates 0→1→0→1… exactly `sweeps` half-cycles.
-    // This is mathematically continuous everywhere (no floor/ceil jumps).
-    const triangleWave = (progress) => {
-      // Sawtooth: goes 0→sweeps linearly
-      const sawtooth = progress * sweeps;
-      // Triangle wave from sawtooth: folds at each integer
-      // Formula: 1 - |2*(sawtooth mod 1) - 1|  but shifted so cycle 0 starts going right
-      // Simpler: use acos(cos()) which is a perfect triangle wave
-      const t = sawtooth * Math.PI; // half-period = 1 section
-      return Math.acos(Math.cos(t)) / Math.PI; // normalized 0→1→0→1…
-    };
+      const trigger = ScrollTrigger.create({
+        trigger: panel,
+        start: 'top 60%',
+        end: 'bottom 40%',
+        onEnter: () => {
+          gsap.to(stage.position, {
+            x: targetX,
+            y: 0,
+            z: 0.2,
+            duration: 0.8,
+            ease: 'power3.inOut',
+            overwrite: true,
+          });
+        },
+        onEnterBack: () => {
+          gsap.to(stage.position, {
+            x: targetX,
+            y: 0,
+            z: 0.2,
+            duration: 0.8,
+            ease: 'power3.inOut',
+            overwrite: true,
+          });
+        },
+        onLeave: () => {
+          // If leaving the last panel, return to center
+          if (i === panels.length - 1) {
+            gsap.to(stage.position, {
+              x: 0,
+              y: 0,
+              z: 0,
+              duration: 0.8,
+              ease: 'power3.inOut',
+              overwrite: true,
+            });
+          }
+        },
+        onLeaveBack: () => {
+          // If scrolling back above the first panel, return to center
+          if (i === 0) {
+            gsap.to(stage.position, {
+              x: 0,
+              y: 0,
+              z: 0,
+              duration: 0.8,
+              ease: 'power3.inOut',
+              overwrite: true,
+            });
+          }
+        },
+      });
 
-    const easeInOut = gsap.parseEase("sine.inOut");
-
-    const setGlobeForProgress = (progress, velocity = 0) => {
-      // Clamp progress to avoid any overshoot
-      const p = Math.max(0, Math.min(1, progress));
-
-      // Continuous ping-pong horizontal position
-      const rawPingPong = triangleWave(p);
-      const easedPP = easeInOut(rawPingPong);
-
-      // Center proximity: 0 at edges, 1 at center of each sweep
-      // Uses sine of the ping-pong to create a smooth bulge
-      const centerFactor = Math.sin(rawPingPong * Math.PI);
-
-      // Position
-      stage.position.set(
-        THREE.MathUtils.lerp(leftX, rightX, easedPP),
-        steadyY,
-        THREE.MathUtils.lerp(baseZ, peakZ, centerFactor)
-      );
-
-      // Rotation: continuous Y rotation accumulates with scroll so globe
-      // always turns in one direction (never snaps back)
-      stage.rotation.set(
-        THREE.MathUtils.lerp(0.1, 0.16, centerFactor),
-        Math.PI * 0.45 + p * Math.PI * sweeps * 0.75,
-        0
-      );
-
-      // Scale: slightly larger when centered
-      const scale = THREE.MathUtils.lerp(baseScale, peakScale, centerFactor);
-      stage.scale.set(scale, scale, scale);
-
-      // Scroll-velocity spin boost
-      motionRef.current.spinBoost = Math.max(
-        motionRef.current.spinBoost,
-        Math.min(Math.abs(velocity) / 1400, 2.2)
-      );
-    };
-
-    // Initialize at scroll top
-    setGlobeForProgress(0);
-
-    const sectionMotion = ScrollTrigger.create({
-      trigger: ".main-scroller",
-      start: "top top",
-      end: "bottom bottom",
-      onUpdate: (self) => setGlobeForProgress(self.progress, self.getVelocity()),
-      onRefresh: (self) => setGlobeForProgress(self.progress, 0),
+      triggers.push(trigger);
     });
 
     return () => {
-      sectionMotion.kill();
+      triggers.forEach((t) => t.kill());
     };
   }, [motionProfile]);
 
