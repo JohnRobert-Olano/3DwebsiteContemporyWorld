@@ -86,6 +86,12 @@ function Earth() {
   const motionRef = useRef({
     spinBoost: 0,
   });
+  const dragRef = useRef({
+    active: false,
+    pointerId: null,
+    lastX: 0,
+    lastY: 0,
+  });
 
   // High-Resolution Textures
   const [dayMap, cloudsMap, specularMap, topologyMap] = useTexture([
@@ -97,7 +103,7 @@ function Earth() {
 
   useEffect(() => {
     [dayMap, cloudsMap, topologyMap].forEach((texture) => {
-      if(texture) {
+      if (texture) {
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 8;
         texture.needsUpdate = true;
@@ -162,23 +168,29 @@ function Earth() {
   useFrame((state, delta) => {
     const elapsed = state.clock.getElapsedTime();
     const motion = motionRef.current;
+    const drag = dragRef.current;
     motion.spinBoost = THREE.MathUtils.damp(motion.spinBoost, 0, 2.5, delta);
 
     if (tiltRef.current) {
       // Locked 23.5° axial tilt
       tiltRef.current.rotation.z = 0.41;
-      
-      const targetX = state.pointer.y * 0.1;
-      const targetY = state.pointer.x * 0.1;
 
-      tiltRef.current.rotation.x = THREE.MathUtils.damp(tiltRef.current.rotation.x, targetX, 5, delta);
-      tiltRef.current.rotation.y = THREE.MathUtils.damp(tiltRef.current.rotation.y, targetY, 5, delta);
+      tiltRef.current.rotation.x = THREE.MathUtils.damp(tiltRef.current.rotation.x, 0, 5, delta);
+      tiltRef.current.rotation.y = THREE.MathUtils.damp(tiltRef.current.rotation.y, 0, 5, delta);
     }
 
     if (spinRef.current) {
-      // Extremely slow baseline rotation so we don't drift away from targeted regions
-      spinRef.current.rotation.y += delta * (0.02 + motion.spinBoost);
-      spinRef.current.rotation.x = Math.sin(elapsed * 0.55) * 0.035;
+      if (!drag.active) {
+        spinRef.current.rotation.y += delta * (0.02 + motion.spinBoost);
+      }
+      if (!drag.active) {
+        spinRef.current.rotation.x = THREE.MathUtils.damp(
+          spinRef.current.rotation.x,
+          Math.sin(elapsed * 0.55) * 0.035,
+          1.6,
+          delta
+        );
+      }
     }
 
     if (cloudsRef.current) {
@@ -187,16 +199,67 @@ function Earth() {
 
   });
 
+  const updateHoverPosition = (e) => {
+    if (earthRef.current && e.point) {
+      earthMaterial.uniforms.hoverPosition.value.copy(e.point);
+    }
+  };
+
   // Track the cursor hit on the 3D mesh
   const handlePointerMove = (e) => {
-    if (earthRef.current) {
-      earthMaterial.uniforms.hoverPosition.value.copy(e.point);
+    updateHoverPosition(e);
+
+    const drag = dragRef.current;
+    if (drag.active && spinRef.current) {
+      e.stopPropagation();
+
+      const dx = e.nativeEvent.clientX - drag.lastX;
+      const dy = e.nativeEvent.clientY - drag.lastY;
+      drag.lastX = e.nativeEvent.clientX;
+      drag.lastY = e.nativeEvent.clientY;
+
+      spinRef.current.rotation.y += dx * 0.01;
+      spinRef.current.rotation.x += dy * 0.01;
+    } else {
       motionRef.current.spinBoost = Math.max(motionRef.current.spinBoost, 0.12);
     }
   };
 
+  const handlePointerDown = (e) => {
+    e.stopPropagation();
+    updateHoverPosition(e);
+
+    dragRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      lastX: e.nativeEvent.clientX,
+      lastY: e.nativeEvent.clientY,
+    };
+
+    if (e.target?.setPointerCapture && e.pointerId !== undefined) {
+      e.target.setPointerCapture(e.pointerId);
+    }
+  };
+
+  const stopDragging = (e) => {
+    const drag = dragRef.current;
+    if (!drag.active) return;
+
+    e.stopPropagation();
+    if (e.target?.releasePointerCapture && drag.pointerId !== null) {
+      e.target.releasePointerCapture(drag.pointerId);
+    }
+
+    dragRef.current = {
+      active: false,
+      pointerId: null,
+      lastX: 0,
+      lastY: 0,
+    };
+  };
+
   const handlePointerOut = () => {
-    if (earthRef.current) {
+    if (earthRef.current && !dragRef.current.active) {
       earthMaterial.uniforms.hoverPosition.value.set(0, 0, 1000);
     }
   };
@@ -205,50 +268,86 @@ function Earth() {
     const stage = stageRef.current;
     if (!stage) return undefined;
 
-    gsap.set(stage.position, { x: 2.2, y: 0, z: 0.8 });
-    gsap.set(stage.rotation, { x: 0.2, y: Math.PI * 0.7, z: 0 });
-    gsap.set(stage.scale, { x: 1.6, y: 1.6, z: 1.6 });
-    if (spinRef.current) {
-      gsap.set(spinRef.current.rotation, { y: 0 });
-    }
+    const panels = gsap.utils.toArray('.panel-section');
+    const sweeps = Math.max(panels.length, 1);
 
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: ".main-scroller",
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 1.1,
-        onUpdate: (self) => {
-          const scrollVelocity = Math.abs(self.getVelocity());
-          motionRef.current.spinBoost = Math.max(
-            motionRef.current.spinBoost,
-            Math.min(scrollVelocity / 1400, 2.2)
-          );
-        },
-      }
+    // How many full left↔right sweeps across the total scroll.
+    // Each section gets one half-sweep so the globe alternates sides per section.
+    const leftX  = -2.35;
+    const rightX =  2.35;
+    const steadyY = 0.0;
+    const baseZ   = -0.25;
+    const peakZ   =  0.65;
+    const baseScale = 1.22;
+    const peakScale = 1.45;
+
+    // Continuous triangle-wave: maps 0→1 progress to a value that
+    // oscillates 0→1→0→1… exactly `sweeps` half-cycles.
+    // This is mathematically continuous everywhere (no floor/ceil jumps).
+    const triangleWave = (progress) => {
+      // Sawtooth: goes 0→sweeps linearly
+      const sawtooth = progress * sweeps;
+      // Triangle wave from sawtooth: folds at each integer
+      // Formula: 1 - |2*(sawtooth mod 1) - 1|  but shifted so cycle 0 starts going right
+      // Simpler: use acos(cos()) which is a perfect triangle wave
+      const t = sawtooth * Math.PI; // half-period = 1 section
+      return Math.acos(Math.cos(t)) / Math.PI; // normalized 0→1→0→1…
+    };
+
+    const easeInOut = gsap.parseEase("power1.inOut");
+
+    const setGlobeForProgress = (progress, velocity = 0) => {
+      // Clamp progress to avoid any overshoot
+      const p = Math.max(0, Math.min(1, progress));
+
+      // Continuous ping-pong horizontal position
+      const rawPingPong = triangleWave(p);
+      const easedPP = easeInOut(rawPingPong);
+
+      // Center proximity: 0 at edges, 1 at center of each sweep
+      // Uses sine of the ping-pong to create a smooth bulge
+      const centerFactor = Math.sin(rawPingPong * Math.PI);
+
+      // Position
+      stage.position.set(
+        THREE.MathUtils.lerp(leftX, rightX, easedPP),
+        steadyY,
+        THREE.MathUtils.lerp(baseZ, peakZ, centerFactor)
+      );
+
+      // Rotation: continuous Y rotation accumulates with scroll so globe
+      // always turns in one direction (never snaps back)
+      stage.rotation.set(
+        THREE.MathUtils.lerp(0.1, 0.16, centerFactor),
+        Math.PI * 0.45 + p * Math.PI * sweeps * 0.75,
+        0
+      );
+
+      // Scale: slightly larger when centered
+      const scale = THREE.MathUtils.lerp(baseScale, peakScale, centerFactor);
+      stage.scale.set(scale, scale, scale);
+
+      // Scroll-velocity spin boost
+      motionRef.current.spinBoost = Math.max(
+        motionRef.current.spinBoost,
+        Math.min(Math.abs(velocity) / 1400, 2.2)
+      );
+    };
+
+    // Initialize at scroll top
+    setGlobeForProgress(0);
+
+    const sectionMotion = ScrollTrigger.create({
+      trigger: ".main-scroller",
+      start: "top top",
+      end: "bottom bottom",
+      onUpdate: (self) => setGlobeForProgress(self.progress, self.getVelocity()),
+      onRefresh: (self) => setGlobeForProgress(self.progress, 0),
     });
 
-    // Sec 1 -> Sec 2: Economy (SE Asia & Taiwan)
-    tl.to(stage.position, { x: 2.0, y: 0.3, z: 1.0, duration: 1 }, 0)
-      .to(stage.rotation, { x: 0.1, y: Math.PI * 0.85, z: 0, duration: 1 }, 0)
-      .to(stage.scale, { x: 1.8, y: 1.8, z: 1.8, duration: 1 }, 0)
-
-    // Sec 2 -> Sec 3: Environment (Pacific Ocean / Island regions)
-    tl.to(stage.position, { x: 2.5, y: -0.2, z: 1.5, duration: 1 }, 1)
-      .to(stage.rotation, { x: 0.0, y: Math.PI * 1.2, z: 0, duration: 1 }, 1)
-      .to(stage.scale, { x: 1.9, y: 1.9, z: 1.9, duration: 1 }, 1)
-
-    // Sec 3 -> Sec 4: Politics (Western Europe & North America)
-    tl.to(stage.position, { x: 2.2, y: -0.4, z: 0.8, duration: 1 }, 2)
-      .to(stage.rotation, { x: 0.3, y: Math.PI * 1.9, z: 0, duration: 1 }, 2)
-      .to(stage.scale, { x: 1.5, y: 1.5, z: 1.5, duration: 1 }, 2)
-
-    // Sec 4 -> Sec 5: Technology (Full global view)
-    tl.to(stage.position, { x: 1.8, y: 0, z: 0, duration: 1 }, 3)
-      .to(stage.rotation, { x: 0.1, y: Math.PI * 2.5, z: 0, duration: 1 }, 3)
-      .to(stage.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 1 }, 3);
-
-    return () => tl.kill();
+    return () => {
+      sectionMotion.kill();
+    };
   }, []);
 
   return (
@@ -258,7 +357,10 @@ function Earth() {
           {/* High-Poly Earth with Shader & Raycast tracking */}
           <mesh
             ref={earthRef}
+            onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
+            onPointerUp={stopDragging}
+            onPointerCancel={stopDragging}
             onPointerOut={handlePointerOut}
           >
             <sphereGeometry args={[2, 256, 256]} />
@@ -293,7 +395,7 @@ function Earth() {
 export default function Scene() {
   return (
     // Set to pointer-events-auto so we can interact with the Earth!
-    <div className="fixed inset-0 z-0 pointer-events-auto">
+    <div className="fixed inset-0 z-0 pointer-events-auto cursor-grab active:cursor-grabbing" style={{ touchAction: 'pan-y' }}>
       <Canvas
         camera={{ position: [0, 0, 8], fov: 45 }}
         gl={{ antialias: true, alpha: true }}

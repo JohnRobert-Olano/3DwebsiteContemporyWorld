@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import * as THREE from 'three';
 
 export default function GeoBorders({ radius = 2.01 }) {
