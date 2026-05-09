@@ -8,7 +8,7 @@ gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 const sections = [
   {
     id: "sec-1",
-    title: "Westphalia & Sovereignty",
+    title: "Foundations of Modernity",
     content: "The Westphalian concept visualization.\n\nUnderstand the origins of the modern state system and the birth of borderless finance."
   },
   {
@@ -18,7 +18,7 @@ const sections = [
   },
   {
     id: "sec-3",
-    title: "The North-South Divide",
+    title: "North-South Divide",
     content: "Explore the stark contrast in economic development.\n\nThe lighting shifts represent the persistent divide between the global north and south."
   },
   {
@@ -56,32 +56,48 @@ export default function Content() {
           onEnterBack: () => setActiveSection(i),
         });
 
-        // The "Content Disappearing" Bug Fix -> Pinning
-        // Pin the panel wrapper to keep it on screen with 150% VH breathing room
+        // Pin the panel wrapper to keep it on screen with +200% VH breathing room
         ScrollTrigger.create({
           trigger: panel,
           start: "top top",
-          end: "+=150%", // Gives the user breathing room to read before the next transition
+          end: "+=200%", 
           pin: true,
-          pinSpacing: true, // This increases the scroll height dynamically
+          pinSpacing: true,
         });
 
-        // Fade in/out the card inside the pinned section based on the scroll progress of the pin
-        gsap.fromTo(panel.querySelector('.card-content'), 
-          { opacity: 0, y: 50 },
+        // Strict Fade-in and Slide-up logic inside the 200% pin.
+        // It enters from 0 to 30%, stays visible, then fades out from 70% to 100%
+        // This ensures the previous one has faded out before the next pin starts scrolling in.
+        const card = panel.querySelector('.card-content');
+        
+        gsap.fromTo(card, 
+          { opacity: 0, y: 80 },
           { 
             opacity: 1, 
             y: 0, 
-            duration: 1, 
             ease: "power2.out",
             scrollTrigger: {
               trigger: panel,
               start: "top top",
-              end: "+=50%", // Finishes fading in early within the pin
+              end: "+=50%",
               scrub: 1,
             }
           }
         );
+
+        // Fade out before the pin ends
+        gsap.to(card, {
+          opacity: 0,
+          y: -80,
+          ease: "power2.in",
+          scrollTrigger: {
+            trigger: panel,
+            start: "+=150%", // start fading out near the end of the 200% pin
+            end: "+=200%",
+            scrub: 1,
+          }
+        });
+
       });
     }, containerRef);
 
@@ -89,7 +105,6 @@ export default function Content() {
   }, []);
 
   const scrollTo = (index) => {
-    // Navigate using the ScrollTrigger pin start positions
     const panels = document.querySelectorAll('.panel-section');
     if (panels[index]) {
       const trigger = ScrollTrigger.getAll().find(t => t.pin === panels[index]);
@@ -99,7 +114,7 @@ export default function Content() {
   };
 
   return (
-    <div ref={containerRef} className="main-scroller relative z-10 w-full pointer-events-none">
+    <div ref={containerRef} className="main-scroller relative z-10 w-full pointer-events-none font-sans">
       
       {/* Sidebar Dot Navigation */}
       <div className="fixed right-8 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-5 pointer-events-auto">
@@ -107,8 +122,8 @@ export default function Content() {
           <button
             key={sec.id}
             onClick={() => scrollTo(i)}
-            className={`w-3 h-3 rounded-full transition-all duration-500 border border-gray-900 ${
-              activeSection === i ? 'bg-gray-900 scale-150' : 'bg-transparent hover:bg-gray-900/30'
+            className={`w-3 h-3 rounded-full transition-all duration-500 border border-white/50 ${
+              activeSection === i ? 'bg-white scale-150' : 'bg-transparent hover:bg-white/30'
             }`}
             aria-label={`Jump to ${sec.title}`}
           />
@@ -116,20 +131,23 @@ export default function Content() {
       </div>
 
       {sections.map((sec, index) => {
-        // Layout alternations to map to 3D Earth movements
-        let layoutClass = "justify-center text-center items-center"; // Sec 1 & 6 (Center)
-        if (index === 1) layoutClass = "justify-center items-start pl-[10vw]"; // Sec 2 (Earth right, text left)
-        if (index === 2) layoutClass = "justify-center items-end pr-[10vw]"; // Sec 3
-        if (index === 3) layoutClass = "justify-center items-start pl-[10vw]"; // Sec 4 (Earth dark/glitchy)
-        if (index === 4) layoutClass = "justify-center items-end pr-[15vw]"; // Sec 5 (Earth left, Timeline right)
+        // Z-Index & Anti-Overlap Layout Management
+        // We push the text to the extreme margins so the center (Earth) is a clear "safe zone".
+        let layoutClass = "justify-end items-center pb-[10vh]"; // Sec 1 (Earth is distant center, Text Bottom)
+        if (index === 1) layoutClass = "justify-center items-start pl-[5vw] md:pl-[10vw]"; // Sec 2 (Earth center/right, Text Left Margin)
+        if (index === 2) layoutClass = "justify-end items-end pr-[5vw] md:pr-[15vw] pb-[10vh]"; // Sec 3 (Earth tilt center, Text Right/Bottom Margin)
+        if (index === 3) layoutClass = "justify-center items-end pr-[5vw] md:pr-[10vw]"; // Sec 4 (Earth rotating fast, Text Right Margin)
+        if (index === 4) layoutClass = "justify-center items-end pr-[10vw] md:pr-[15vw]"; // Sec 5 (Earth left, Text Right)
+        if (index === 5) layoutClass = "justify-end items-center pb-[15vh]"; // Sec 6 (Earth zooming out, Text Bottom center)
 
         return (
           <section id={sec.id} key={sec.id} className={`panel-section h-screen w-full flex flex-col ${layoutClass}`}>
-            <div className="card-content bg-white/10 backdrop-blur-md border border-white/20 p-10 md:p-14 rounded-3xl max-w-2xl mx-4 md:mx-0 pointer-events-auto shadow-2xl">
-              <h2 className="text-4xl md:text-5xl lg:text-6xl text-gray-900 font-serif font-bold mb-8 leading-tight tracking-tight drop-shadow-sm">
+            {/* The Text Card (Glassmorphism + Cosmos Typography) */}
+            <div className="card-content bg-white/5 backdrop-blur-2xl border border-white/10 p-8 md:p-12 rounded-3xl max-w-xl mx-4 md:mx-0 pointer-events-auto shadow-2xl">
+              <h2 className="text-3xl md:text-5xl text-white font-bold mb-6 uppercase tracking-[0.15em] leading-tight drop-shadow-lg">
                 {sec.title}
               </h2>
-              <div className="text-lg md:text-xl text-gray-800 font-mono whitespace-pre-line leading-loose drop-shadow-sm">
+              <div className="text-base md:text-lg text-[#888888] font-light whitespace-pre-line leading-loose drop-shadow-sm">
                 {sec.content}
               </div>
             </div>
