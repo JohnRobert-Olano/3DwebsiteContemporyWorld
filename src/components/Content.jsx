@@ -136,72 +136,77 @@ export default function Content() {
         const panel = card.closest('.panel-section');
         if (!panel) return;
 
-        /* — Initial state: card hidden off-screen on its anchor side — */
         const side = cardSide(i);
         gsap.set(card, {
           opacity: 0,
-          x: side === 'right' ? 80 : -80,
+          x: side === 'right' ? 100 : -100,
         });
 
-        /* — Build a rapid fire-and-forget timeline — */
-        const enterTL = gsap.timeline({ paused: true });
+        const tl = gsap.timeline({
+          scrollTrigger: {
+            trigger: panel,
+            start: 'top top',
+            end: '+=150%', // Pin the section for 1.5x viewport height
+            scrub: 1,
+            pin: true,
+            onEnter: () => {
+              setActiveSection(i);
+              window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
+            },
+            onEnterBack: () => {
+              setActiveSection(i);
+              window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
+            },
+            onLeave: () => {
+              window.globeTargetDirection = 0;
+            },
+            onLeaveBack: () => {
+              window.globeTargetDirection = 0;
+            },
+          },
+        });
 
-        /* Card slides in */
-        enterTL.to(card, {
+        // 1. Fade in and slide the card into place
+        tl.to(card, {
           opacity: 1,
           x: 0,
-          duration: 0.55,
-          ease: 'power3.out',
+          duration: 1,
+          ease: 'power2.out',
         });
 
-        /* Micro-stagger inner typography */
+        // 2. Stagger text appearance over scroll
         const staggerEls = card.querySelectorAll('.stagger-item');
-        enterTL.fromTo(
+        tl.fromTo(
           staggerEls,
-          { opacity: 0, y: 18 },
+          { opacity: 0, y: 30 },
           {
             opacity: 1,
             y: 0,
-            duration: 0.4,
-            ease: 'power3.out',
-            stagger: 0.05,
+            duration: 1.5,
+            ease: 'power2.out',
+            stagger: 0.5,
           },
-          0.1, // slight overlap with card entrance
+          "<+=0.5" // Start slightly after card begins entering
         );
 
-        /* — Build the exit timeline (reverse direction) — */
-        const exitTL = gsap.timeline({ paused: true });
-        exitTL.to(card, {
+        // 3. Hold the complete card visible for some scroll distance
+        tl.to({}, { duration: 1.5 });
+
+        // 4. Fade out and slide the card out
+        tl.to(card, {
           opacity: 0,
           x: side === 'right' ? 50 : -50,
-          duration: 0.35,
+          duration: 1,
           ease: 'power2.in',
         });
+      });
 
-        /* — ScrollTrigger: toggleActions fires timelines — */
-        ScrollTrigger.create({
-          trigger: panel,
-          start: 'top 60%',
-          end: 'bottom 40%',
-          onEnter: () => {
-            exitTL.pause(0);
-            enterTL.restart();
-            setActiveSection(i);
-          },
-          onEnterBack: () => {
-            exitTL.pause(0);
-            enterTL.restart();
-            setActiveSection(i);
-          },
-          onLeave: () => {
-            enterTL.pause();
-            exitTL.restart();
-          },
-          onLeaveBack: () => {
-            enterTL.pause();
-            exitTL.restart();
-          },
-        });
+      // Add a dedicated trigger for the footer spacer so we know we hit the absolute bottom
+      ScrollTrigger.create({
+        trigger: '.footer-spacer',
+        start: 'top 80%', // Triggers when the top of the footer is 80% down the screen
+        onEnter: () => { window.isAtEnd = true; },
+        onLeaveBack: () => { window.isAtEnd = false; }
       });
     }, containerRef);
 
@@ -226,30 +231,7 @@ export default function Content() {
       ref={containerRef}
       className="main-scroller relative z-10 w-full pointer-events-none font-sans"
     >
-      {/* ─── SIDE NAV (Desktop — right-aligned, 01-05 tracker) ─── */}
-      <nav
-        className="fixed right-5 top-1/2 z-50 hidden w-48 -translate-y-1/2 flex-col gap-2 pointer-events-auto lg:flex"
-        aria-label="Section navigation"
-      >
-        {sections.map((sec, i) => (
-          <button
-            key={sec.id}
-            onClick={() => scrollTo(i)}
-            className={`grid grid-cols-[2rem_1fr] items-center gap-3 rounded-lg border px-3 py-2 text-left text-xs uppercase tracking-[0.16em] transition-all duration-300 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3] ${
-              activeSection === i
-                ? 'border-[#0A6ED3]/70 bg-[#0A6ED3]/20 text-white scale-105'
-                : 'border-white/10 bg-black/35 text-gray-400 hover:border-white/30 hover:bg-white/10 hover:text-white'
-            }`}
-            aria-current={activeSection === i ? 'step' : undefined}
-            aria-label={`Jump to ${sec.title}`}
-          >
-            <span className="text-[0.65rem] text-[#7DB7F0]">
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            <span className="truncate">{sec.navLabel}</span>
-          </button>
-        ))}
-      </nav>
+
 
       {/* ─── MOBILE NAV (bottom bar) ─── */}
       <nav
@@ -352,7 +334,7 @@ export default function Content() {
       })}
 
       {/* ─── FOOTER SPACER ─── */}
-      <div className="h-[40vh]" aria-hidden="true" />
+      <div className="footer-spacer h-[100vh]" aria-hidden="true" />
     </div>
   );
 }

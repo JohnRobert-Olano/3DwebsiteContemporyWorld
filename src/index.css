@@ -28,3 +28,9 @@ h1, h2, h3, h4, h5, h6, .font-sans {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(10, 110, 211, 0.2);
 }
+
+.mapboxgl-ctrl-logo,
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right {
+  display: none !important;
+}

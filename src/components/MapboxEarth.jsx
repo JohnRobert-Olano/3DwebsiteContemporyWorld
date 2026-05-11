@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const ROME = [12.4964, 41.9028];
 const COLOSSEUM = {
@@ -13,7 +14,7 @@ const EARTH_RESTORE_ZOOM = 16.5;
 const EARTH_SCROLL_MOTION_MAX_ZOOM = 5.2;
 const EARTH_IDLE_CENTER = [12.4922, 22];
 const EARTH_ROTATION_DEGREES_PER_SECOND = 1.45;
-const EARTH_MOTION_EASE = 0.085;
+const EARTH_MOTION_EASE = 0.012;
 const LIGHT_PRESET = 'dusk';
 const HIDDEN_LABEL_CONFIG = {
   showPlaceLabels: false,
@@ -164,19 +165,9 @@ function wrapLongitude(lng) {
 }
 
 function getEarthScrollDirection() {
-  const panels = Array.from(document.querySelectorAll('.panel-section'));
-  const viewportAnchor = window.innerHeight * 0.5;
-
-  const activeIndex = panels.findIndex((panel) => {
-    const rect = panel.getBoundingClientRect();
-    return rect.top <= viewportAnchor && rect.bottom >= viewportAnchor;
-  });
-
-  if (activeIndex === -1) {
-    return 0;
-  }
-
-  return activeIndex % 2 === 0 ? -1 : 1;
+  // Use the global variable updated by Content.jsx's GSAP ScrollTrigger
+  // This prevents expensive DOM layout thrashing on every frame (60fps).
+  return window.globeTargetDirection || 0;
 }
 
 function getEarthIdleZoom() {
@@ -184,31 +175,29 @@ function getEarthIdleZoom() {
   const isTablet = window.innerWidth < 1024;
 
   if (isNarrow) {
-    return 1.18;
+    return 1.4;
   }
 
   if (isTablet) {
-    return 1.58;
+    return 1.8;
   }
 
-  return Math.min(1.9, Math.max(1.76, window.innerWidth * 0.00125));
+  // Significantly increase zoom to make the Earth massive (like the basketball reference)
+  return Math.min(2.8, Math.max(2.1, window.innerWidth * 0.0016));
 }
 
 function getEarthHorizontalPadding() {
-  const isNarrow = window.innerWidth < 768;
-  const isTablet = window.innerWidth < 1024;
-  const ratio = isNarrow ? 0.4 : isTablet ? 0.52 : 0.62;
-  const min = isNarrow ? 130 : isTablet ? 300 : 640;
-  const max = isNarrow ? 240 : isTablet ? 500 : 940;
-
-  return Math.min(max, Math.max(min, window.innerWidth * ratio));
+  // Push the Earth so far that its center is almost at the edge of the screen.
+  // 85% padding means the center of the globe will be at 92.5% of the screen width.
+  return window.innerWidth * 0.85;
 }
 
-function startEarthScrollMotion(map) {
+function startEarthScrollMotion(map, onScrollStatusChange) {
   let frameId = 0;
   let lastTime = performance.now();
   let spinLng = EARTH_IDLE_CENTER[0];
   let horizontalDirection = 0;
+  let lastIsEnd = false;
 
   const tick = (time) => {
     const deltaSeconds = Math.min(0.05, (time - lastTime) / 1000);
@@ -224,16 +213,30 @@ function startEarthScrollMotion(map) {
 
     if (shouldAnimateEarth) {
       const targetDirection = getEarthScrollDirection();
-      horizontalDirection += (targetDirection - horizontalDirection) * EARTH_MOTION_EASE;
-      spinLng = wrapLongitude(spinLng + EARTH_ROTATION_DEGREES_PER_SECOND * deltaSeconds);
+      const transferVelocity = targetDirection - horizontalDirection;
+      horizontalDirection += transferVelocity * EARTH_MOTION_EASE;
+      
+      // Add extra spin proportional to transfer velocity so it "spins" while transferring
+      const transferSpin = Math.abs(transferVelocity) * 300;
+      spinLng = wrapLongitude(spinLng + (EARTH_ROTATION_DEGREES_PER_SECOND + transferSpin) * deltaSeconds);
 
       const paddingAmount = getEarthHorizontalPadding() * Math.abs(horizontalDirection);
 
+      // Calculate hover and banking effects
+      const timeInSeconds = time / 1000;
+      const bobbing = Math.sin(timeInSeconds * 1.5) * 1.5; // subtle vertical hover
+      const banking = horizontalDirection * -12; // dynamic banking when moving left/right
+
+      // Calculate dynamic zoom: small in the center, massive when pushed to the sides
+      const baseZoom = 1.35;
+      const targetEdgeZoom = getEarthIdleZoom();
+      const dynamicZoom = baseZoom + (targetEdgeZoom - baseZoom) * Math.abs(horizontalDirection);
+
       map.jumpTo({
-        center: [spinLng, EARTH_IDLE_CENTER[1]],
-        zoom: getEarthIdleZoom(),
-        pitch: 0,
-        bearing: 0,
+        center: [spinLng, EARTH_IDLE_CENTER[1] + bobbing],
+        zoom: dynamicZoom,
+        pitch: Math.abs(horizontalDirection) * 8, // slight tilt back when shifted
+        bearing: banking,
         padding: {
           top: 0,
           bottom: 0,
@@ -241,6 +244,13 @@ function startEarthScrollMotion(map) {
           right: horizontalDirection < 0 ? paddingAmount : 0,
         },
       });
+
+      // Only show the map button when we explicitly hit the footer spacer at the absolute bottom
+      const currentIsEnd = !!window.isAtEnd;
+      if (currentIsEnd !== lastIsEnd) {
+        lastIsEnd = currentIsEnd;
+        onScrollStatusChange(currentIsEnd);
+      }
     }
 
     frameId = requestAnimationFrame(tick);
@@ -295,6 +305,15 @@ function restoreEarthStyleWhenZoomedOut(map) {
 async function flyToColosseum(map) {
   map.codexRouteAnimating = true;
 
+  // Enable all interactions for free exploration
+  map.scrollZoom.enable();
+  map.boxZoom.enable();
+  map.dragRotate.enable();
+  map.dragPan.enable();
+  map.keyboard.enable();
+  map.doubleClickZoom.enable();
+  map.touchZoomRotate.enable();
+
   try {
     await switchSceneStyle(map, EARTH_STYLE_URL, EARTH_BASEMAP_CONFIG, 'earth');
 
@@ -341,6 +360,7 @@ export default function MapboxEarth() {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const [mapError, setMapError] = useState('');
+  const [isAtEnd, setIsAtEnd] = useState(false);
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
   const setupError = !token
     ? 'Missing VITE_MAPBOX_TOKEN in .env'
@@ -365,17 +385,26 @@ export default function MapboxEarth() {
       bearing: 0,
       antialias: true,
       maxPitch: 85,
+      scrollZoom: false,
+      boxZoom: false,
+      dragRotate: false,
+      dragPan: false,
+      keyboard: false,
+      doubleClickZoom: false,
+      touchZoomRotate: false,
       config: {
         basemap: EARTH_BASEMAP_CONFIG,
       },
-      attributionControl: true,
+      attributionControl: false,
     });
 
     mapRef.current = map;
     map.codexSceneProfile = 'earth';
     map.codexRouteAnimating = false;
     map.codexStyleSwitching = false;
-    const stopEarthScrollMotion = startEarthScrollMotion(map);
+    const stopEarthScrollMotion = startEarthScrollMotion(map, (endStatus) => {
+      setIsAtEnd(endStatus);
+    });
 
     map.on('style.load', () => {
       const config = map.codexSceneProfile === 'city-model'
@@ -404,7 +433,41 @@ export default function MapboxEarth() {
       restoreEarthStyleWhenZoomedOut(map);
     });
 
+    const handleResetGlobe = async () => {
+      if (!mapRef.current) return;
+      const m = mapRef.current;
+
+      m.codexRouteAnimating = true;
+
+      m.scrollZoom.disable();
+      m.boxZoom.disable();
+      m.dragRotate.disable();
+      m.dragPan.disable();
+      m.keyboard.disable();
+      m.doubleClickZoom.disable();
+      m.touchZoomRotate.disable();
+
+      try {
+        await switchSceneStyle(m, EARTH_STYLE_URL, EARTH_BASEMAP_CONFIG, 'earth');
+        m.flyTo({
+          center: EARTH_IDLE_CENTER,
+          zoom: 1.35,
+          pitch: 0,
+          bearing: 0,
+          duration: 2500,
+          essential: true,
+        });
+        await waitForMoveEnd(m);
+        window.dispatchEvent(new Event('globeResetComplete'));
+      } finally {
+        m.codexRouteAnimating = false;
+      }
+    };
+
+    window.addEventListener('resetGlobe', handleResetGlobe);
+
     return () => {
+      window.removeEventListener('resetGlobe', handleResetGlobe);
       stopEarthScrollMotion();
       map.remove();
       mapRef.current = null;
@@ -417,18 +480,31 @@ export default function MapboxEarth() {
         <div ref={containerRef} className="h-full w-full" />
       </div>
 
-      <div className="fixed bottom-24 left-4 z-40 pointer-events-auto rounded-lg border border-[#0A6ED3]/30 bg-black/70 p-3 shadow-2xl backdrop-blur-xl sm:left-6">
-        <button
-          type="button"
-          onClick={() => mapRef.current && flyToColosseum(mapRef.current)}
-          className="cursor-pointer rounded-md border border-[#0A6ED3]/60 bg-[#0A6ED3]/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition-colors duration-200 hover:bg-[#0A6ED3]/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7DB7F0]"
-        >
-          Colosseum
-        </button>
-        <p className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-gray-400">
-          Globe to Rome
-        </p>
-      </div>
+      <AnimatePresence>
+        {isAtEnd && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center pointer-events-none"
+          >
+            <button
+              type="button"
+              onClick={() => mapRef.current && flyToColosseum(mapRef.current)}
+              className="pointer-events-auto cursor-pointer rounded-full border border-[#0A6ED3]/60 bg-[#0A6ED3]/20 p-4 text-white transition-all duration-300 hover:bg-[#0A6ED3]/40 hover:scale-110 hover:shadow-[0_0_20px_rgba(10,110,211,0.5)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#7DB7F0] flex items-center justify-center backdrop-blur-xl"
+              aria-label="Explore Rome"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
 
       {setupError && (
         <div className="fixed left-1/2 top-24 z-50 w-[min(90vw,32rem)] -translate-x-1/2 rounded-lg border border-red-500/40 bg-black/80 p-4 text-sm text-white shadow-2xl backdrop-blur-xl">
