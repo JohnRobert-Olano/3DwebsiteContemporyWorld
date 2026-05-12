@@ -2,6 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { motion, AnimatePresence } from 'framer-motion';
+import SlidePanel from './SlidePanel';
+
+const ROME_SLIDE = {
+  tag: 'Slide 01',
+  subTitle: 'Destination — Rome',
+  title: 'Lorem Ipsum',
+  summary:
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
+  points: [
+    {
+      label: 'Lorem',
+      text: 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
+    },
+    {
+      label: 'Ipsum',
+      text: 'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
+    },
+  ],
+  example:
+    'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.',
+};
 
 const ROME = [12.4964, 41.9028];
 const COLOSSEUM = {
@@ -361,6 +382,14 @@ export default function MapboxEarth() {
   const mapRef = useRef(null);
   const [mapError, setMapError] = useState('');
   const [isAtEnd, setIsAtEnd] = useState(false);
+  const [showRomeSlide, setShowRomeSlide] = useState(false);
+
+  const handleExploreRome = async () => {
+    if (!mapRef.current) return;
+    if (mapRef.current.codexRouteAnimating) return;
+    await flyToColosseum(mapRef.current);
+    setShowRomeSlide(true);
+  };
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
   const setupError = !token
     ? 'Missing VITE_MAPBOX_TOKEN in .env'
@@ -437,6 +466,7 @@ export default function MapboxEarth() {
       if (!mapRef.current) return;
       const m = mapRef.current;
 
+      setShowRomeSlide(false);
       m.codexRouteAnimating = true;
 
       m.scrollZoom.disable();
@@ -491,7 +521,7 @@ export default function MapboxEarth() {
           >
             <button
               type="button"
-              onClick={() => mapRef.current && flyToColosseum(mapRef.current)}
+              onClick={handleExploreRome}
               className="pointer-events-auto cursor-pointer rounded-full border border-[#0A6ED3]/60 bg-[#0A6ED3]/20 p-4 text-white transition-all duration-300 hover:bg-[#0A6ED3]/40 hover:scale-110 hover:shadow-[0_0_20px_rgba(10,110,211,0.5)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#7DB7F0] flex items-center justify-center backdrop-blur-xl"
               aria-label="Explore Rome"
             >
@@ -514,6 +544,12 @@ export default function MapboxEarth() {
           <p className="mt-2 text-gray-200">{setupError}</p>
         </div>
       )}
+
+      <SlidePanel
+        open={showRomeSlide}
+        onClose={() => setShowRomeSlide(false)}
+        slide={ROME_SLIDE}
+      />
     </>
   );
 }
