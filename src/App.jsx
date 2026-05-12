@@ -4,9 +4,11 @@ import Lenis from 'lenis';
 import MapboxEarth from './components/MapboxEarth';
 import Content from './components/Content';
 import LoadingScreen from './components/LoadingScreen';
+import IntroSequence from './components/IntroSequence';
 
 function App() {
   const [isResetting, setIsResetting] = useState(false);
+  const [introActive, setIntroActive] = useState(true);
   const lenisRef = useRef(null);
 
   useEffect(() => {
@@ -23,6 +25,8 @@ function App() {
       infinite: false,
     });
     lenisRef.current = lenis;
+    // Hold scroll while the intro plays so the user can't bail out mid-reveal
+    lenis.stop();
 
     function raf(time) {
       lenis.raf(time);
@@ -34,6 +38,11 @@ function App() {
       lenis.destroy();
     };
   }, []);
+
+  const handleIntroComplete = () => {
+    setIntroActive(false);
+    if (lenisRef.current) lenisRef.current.start();
+  };
 
   const handleHomeClick = (e) => {
     e.preventDefault();
@@ -64,6 +73,12 @@ function App() {
 
   return (
     <main className="relative w-full min-h-screen bg-[#080808] text-white overflow-x-hidden font-sans">
+      <AnimatePresence>
+        {introActive && (
+          <IntroSequence key="intro" onComplete={handleIntroComplete} />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {isResetting && (
           <motion.div
