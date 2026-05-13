@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import SlidePanel from './SlidePanel';
-import { destinations, romeIntro } from '../lib/data/destinations';
+import { destinations } from '../lib/data/destinations';
 
 const ROME_SLIDE = {
   tag: 'Slide 01',
@@ -203,27 +203,46 @@ const ROME_KEYFRAMES = {
   },
 };
 
-// Per-destination cinematic flight tuning (mirrors Rome's two-stage handoff).
-// 0.0 → 0.5 (earth profile):  previous coords (globe altitude) → current coords (regional zoom).
-// 0.5 → 1.0 (city profile):   current coords (regional zoom)   → current coords (ground/landmark zoom).
-//
-// The final city-end keyframe uses a near-horizontal pitch (76°) so the
-// landmark is seen from a low, front-facing eye-level perspective rather
-// than a top-down bird's-eye view — the building rises in the frame with
-// the city horizon visible behind it.
+// Per-destination camera targets for automatic, non-scrubbed flights.
 const DESTINATION_FLIGHT = {
-  earthStart: { zoom: 2.4, pitch: 0, bearing: 0 },
-  earthMid: { zoom: 5.5, pitch: 38, bearing: -16 },
   cityEnd: { zoom: 16.6, pitch: 76, bearing: -32 },
+  islandBirdseye: { zoom: 14.2, pitch: 0, bearing: 0 },
+  mobileIslandBirdseye: { zoom: 13.2, pitch: 0, bearing: 0 },
   mobileSnap: { zoom: 6.2, pitch: 0, bearing: 0 },
 };
-const DESTINATION_PHASE_SPLIT = 0.5;
-const DESTINATION_MARKER_FADE_IN_START = 0.1;
-const DESTINATION_MARKER_FADE_IN_END = 0.25;
-const DESTINATION_MARKER_FADE_OUT_START = 0.42;
-const DESTINATION_MARKER_FADE_OUT_END = 0.52;
-const DESTINATION_ARC_FADE_START = 0.45;
-const DESTINATION_ARC_FADE_END = 0.55;
+
+const DESTINATION_VIEW_OVERRIDES = {
+  // Camera east, looking west across St. Peter's Square toward the basilica facade + dome.
+  // Lower pitch silhouettes the dome against the sky.
+  'saint-peters-basilica': { zoom: 16.5, pitch: 65, bearing: -90 },
+  // Pin at real-world South Gate. Camera south of the gate at a steep pitch
+  // so the gatehouse + barbican fill the frame, the wall extends east/west,
+  // and the moat sits in the foreground — the iconic Yongning Gate view.
+  'xian-city-wall': { zoom: 16.4, pitch: 72, bearing: 0 },
+  // Front view of the south facade — the ceremonial main entrance via the
+  // Puerta del Príncipe across Plaza de la Armería.
+  'royal-palace-madrid': { zoom: 17.0, pitch: 70, bearing: 0 },
+  // Head-on view of the Torbau gatehouse archway. Camera SE looking NW.
+  'neuschwanstein-castle': { zoom: 17.3, pitch: 72, bearing: -45 },
+  // Front view of the east facade (Mall / Victoria Memorial).
+  'buckingham-palace': { zoom: 17.0, pitch: 72, bearing: -90 },
+  // Head-on front view of Elizabeth Tower's north face, Palace of
+  // Westminster as backdrop.
+  'big-ben': { zoom: 17.4, pitch: 66, bearing: 180 },
+  // Statue faces SE at ~116° azimuth — camera SE, looking NW at her face.
+  'statue-of-liberty': { zoom: 17.4, pitch: 62, bearing: -64 },
+  // Front view of the North Portico (Pennsylvania Avenue / official entry).
+  'white-house': { zoom: 17.4, pitch: 68, bearing: 180 },
+  // Pulled back so One WTC tower fits in frame with the surrounding Lower
+  // Manhattan skyline instead of clipping the spire.
+  'world-trade-center-nyc': { zoom: 15.8, pitch: 65, bearing: 180 },
+  // 3D angled view of the island (no longer a flat satellite top-down).
+  // Pitch 60 + city-model profile renders the fallback island extrusion.
+  'san-salvador-island': { zoom: 14.5, pitch: 60, bearing: 0 },
+};
+
+const DESTINATION_FLIGHT_DURATION = 2200;
+const DESTINATION_MOBILE_FLIGHT_DURATION = 1500;
 const DESTINATION_ROUTE_GLOW_BASE_OPACITY = 0.26;
 const DESTINATION_ROUTE_LINE_BASE_OPACITY = 0.86;
 
@@ -234,8 +253,8 @@ const emptyRouteData = {
 
 // ─── Custom 3D fallback landmarks ──────────────────────────────────────────
 // Mapbox's built-in `show3dLandmarks` only renders first-party landmark
-// meshes for major cities. Destinations like Xi'An's fortifications, the tiny
-// San Salvador Island, and Cagusuan Church have no 3D data, so at city-zoom
+// meshes for major cities. Destinations like Xi'an City Wall, the tiny
+// San Salvador Island, and Magellan Landing Site have no 3D data, so at city-zoom
 // the user would see nothing distinctive. These hand-crafted fill-extrusion
 // shapes give each location a recognizable physical presence at the same
 // scale as Mapbox's real landmarks.
@@ -243,13 +262,21 @@ const FALLBACK_LANDMARK_SOURCE_ID = 'codex-fallback-landmarks';
 const FALLBACK_LANDMARK_LAYER_ID = 'codex-fallback-landmarks-extrusion';
 
 function buildXianWallFeatures() {
-  // Xi'An's Ming-era city walls form a rectangular ring around the historic
-  // core, roughly 3.5km x 2.7km, 12m tall, ~14m thick.
+  // Xi'an City Wall — focal-scale model. The real Ming-era perimeter is
+  // ~3.5km × 2.7km, but at the cityEnd cinematic framing (zoom 16.6,
+  // pitch 76, bearing -32) a wall ring that wide sits beyond the
+  // foreground and Mapbox's natural city tiles fill the center of the
+  // shot instead of our fortification. We collapse the ring to a
+  // compact ~950m × 800m wall centered on the destination anchor so it
+  // reads as the focal landmark in the frame — matching the "fortified
+  // compound at center of view" reference. The walls are slightly
+  // thickened and a taller south gate tower marks the face the camera
+  // sweeps toward.
   const center = [108.9486, 34.2611];
-  const halfW = 0.019;   // ~1.74 km east half-width
-  const halfH = 0.012;   // ~1.33 km north half-height
-  const tLon = 0.00015;  // ~14m wall thickness east-west
-  const tLat = 0.00013;  // ~14m wall thickness north-south
+  const halfW = 0.00475;  // ~435m east-west half (~870m total)
+  const halfH = 0.00360;  // ~400m north-south half (~800m total)
+  const tLon = 0.00022;   // ~20m wall thickness east-west
+  const tLat = 0.00020;   // ~22m wall thickness north-south
 
   // Outer ring (counter-clockwise)
   const outer = [
@@ -268,12 +295,27 @@ function buildXianWallFeatures() {
     [center[0] - halfW + tLon, center[1] - halfH + tLat],
   ];
 
+  // South Gate Tower (Yongning-style) — straddles the south wall and rises
+  // above it. The cinematic camera sweeps in from the southeast at
+  // bearing -32, so a taller mass on the south face gives the shot a
+  // recognizable focal landmark instead of a plain wall ring.
+  const gateCenterLat = center[1] - halfH;
+  const gateHalfLon = 0.00028;  // ~26m E-W half
+  const gateHalfLat = 0.00024;  // ~26m N-S half (straddles the wall)
+  const gateTower = [
+    [center[0] - gateHalfLon, gateCenterLat - gateHalfLat],
+    [center[0] + gateHalfLon, gateCenterLat - gateHalfLat],
+    [center[0] + gateHalfLon, gateCenterLat + gateHalfLat],
+    [center[0] - gateHalfLon, gateCenterLat + gateHalfLat],
+    [center[0] - gateHalfLon, gateCenterLat - gateHalfLat],
+  ];
+
   return [
     {
       type: 'Feature',
       properties: {
         id: 'xian-walls',
-        height: 12,
+        height: 14,
         base: 0,
         color: '#7C6A55',
       },
@@ -282,15 +324,28 @@ function buildXianWallFeatures() {
         coordinates: [outer, inner],
       },
     },
+    {
+      type: 'Feature',
+      properties: {
+        id: 'xian-south-gate-tower',
+        height: 28,
+        base: 0,
+        color: '#9C8463',
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [gateTower],
+      },
+    },
   ];
 }
 
 function buildSanSalvadorFeatures() {
-  // San Salvador Island, Zambales — small tropical island ~500m x 300m.
-  // Modeled as an oval landmass with a slim lighthouse marker at center.
-  const center = [120.15, 14.7833];
-  const halfW = 0.00235;  // ~250m east-west half
-  const halfH = 0.0014;   // ~155m north-south half
+  // San Salvador Island, Masinloc, Zambales. This top-down fallback is kept
+  // low and wide so the bird's-eye map view reads as the whole island.
+  const center = [119.9114, 15.5087];
+  const halfW = 0.0058;  // ~620m east-west half
+  const halfH = 0.0034;  // ~375m north-south half
   const islandPoints = 32;
   const islandRing = [];
   for (let i = 0; i <= islandPoints; i += 1) {
@@ -335,15 +390,14 @@ function buildSanSalvadorFeatures() {
   ];
 }
 
-function buildCagusuanFeatures() {
-  // Cagusuan Church & Plaza, Guiuan, Eastern Samar — small Spanish-era
-  // heritage chapel. Modeled as a 25m x 12m nave plus a 6m square bell
-  // tower on the south facade.
-  const center = [125.7297, 11.0286];
-  const halfW = 0.000055;   // ~6m east-west half (12m wide nave)
-  const halfH = 0.00011;    // ~12.5m north-south half (25m long nave)
+function buildMagellanLandingFeatures() {
+  // Magellan Landing Site / Magellan's Anchorage in Barangay Masao, Butuan.
+  // Modeled as a low coastal memorial platform plus a compact vertical marker.
+  const center = [125.483603, 8.999434];
+  const halfW = 0.00016; // ~17.5m east-west half
+  const halfH = 0.00007; // ~7.7m north-south half
 
-  const nave = [
+  const platform = [
     [center[0] - halfW, center[1] - halfH],
     [center[0] + halfW, center[1] - halfH],
     [center[0] + halfW, center[1] + halfH],
@@ -351,36 +405,35 @@ function buildCagusuanFeatures() {
     [center[0] - halfW, center[1] - halfH],
   ];
 
-  const t = 0.0000275; // ~3m half-side (6m square tower)
-  const towerCenterLat = center[1] - halfH - t; // south of the nave
-  const tower = [
-    [center[0] - t, towerCenterLat - t],
-    [center[0] + t, towerCenterLat - t],
-    [center[0] + t, towerCenterLat + t],
-    [center[0] - t, towerCenterLat + t],
-    [center[0] - t, towerCenterLat - t],
+  const markerHalf = 0.000028; // ~3m half-side marker
+  const marker = [
+    [center[0] - markerHalf, center[1] - markerHalf],
+    [center[0] + markerHalf, center[1] - markerHalf],
+    [center[0] + markerHalf, center[1] + markerHalf],
+    [center[0] - markerHalf, center[1] + markerHalf],
+    [center[0] - markerHalf, center[1] - markerHalf],
   ];
 
   return [
     {
       type: 'Feature',
       properties: {
-        id: 'cagusuan-nave',
-        height: 12,
+        id: 'magellan-landing-platform',
+        height: 2,
         base: 0,
-        color: '#E8D9B9',
+        color: '#C8B27A',
       },
-      geometry: { type: 'Polygon', coordinates: [nave] },
+      geometry: { type: 'Polygon', coordinates: [platform] },
     },
     {
       type: 'Feature',
       properties: {
-        id: 'cagusuan-bell-tower',
-        height: 20,
-        base: 0,
-        color: '#D4B896',
+        id: 'magellan-landing-marker',
+        height: 18,
+        base: 2,
+        color: '#F4F0E6',
       },
-      geometry: { type: 'Polygon', coordinates: [tower] },
+      geometry: { type: 'Polygon', coordinates: [marker] },
     },
   ];
 }
@@ -391,7 +444,7 @@ function buildFallbackLandmarkGeoJSON() {
     features: [
       ...buildXianWallFeatures(),
       ...buildSanSalvadorFeatures(),
-      ...buildCagusuanFeatures(),
+      ...buildMagellanLandingFeatures(),
     ],
   };
 }
@@ -432,21 +485,8 @@ function ensureFallbackLandmarks(map) {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const clamp01 = (value) => clamp(value, 0, 1);
-const smoothstep = (edge0, edge1, value) => {
-  const t = clamp01((value - edge0) / (edge1 - edge0));
-  return t * t * (3 - 2 * t);
-};
 
 const destinationToLngLat = (destination) => [destination.lon, destination.lat];
-
-function lerpLongitude(a, b, t) {
-  const delta = wrapLongitude(b - a);
-  return wrapLongitude(a + delta * t);
-}
-
-function lerpLngLatWrapped(a, b, t) {
-  return [lerpLongitude(a[0], b[0], t), lerp(a[1], b[1], t)];
-}
 
 function createDestinationMarker(map) {
   if (map.codexDestinationMarker) return map.codexDestinationMarker;
@@ -522,54 +562,6 @@ function ensureDestinationOverlays(map) {
   createDestinationMarker(map);
 }
 
-function makeRouteFeature(from, to, drawProgress) {
-  const progress = clamp01(drawProgress);
-  if (progress <= 0.01) return emptyRouteData;
-
-  const fromCoord = destinationToLngLat(from);
-  const toCoord = destinationToLngLat(to);
-  const fullSteps = 72;
-  const visibleSteps = Math.max(2, Math.ceil(fullSteps * progress));
-  const coordinates = [];
-  const lonDistance = Math.abs(wrapLongitude(toCoord[0] - fromCoord[0]));
-  const latDistance = Math.abs(toCoord[1] - fromCoord[1]);
-  const lift = Math.min(10, Math.max(1.8, (lonDistance + latDistance) * 0.08));
-
-  for (let i = 0; i < visibleSteps; i += 1) {
-    const t = visibleSteps === 1 ? 0 : (i / (visibleSteps - 1)) * progress;
-    const eased = easeInOutCubic(clamp01(t));
-    coordinates.push([
-      lerpLongitude(fromCoord[0], toCoord[0], eased),
-      lerp(fromCoord[1], toCoord[1], eased) + Math.sin(eased * Math.PI) * lift,
-    ]);
-  }
-
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates,
-        },
-      },
-    ],
-  };
-}
-
-function updateDestinationRoute(map, index, progress) {
-  const source = map.getSource(DESTINATION_ROUTE_SOURCE_ID);
-  if (!source) return;
-
-  const current = destinations[index];
-  const previous = index === 0 ? romeIntro : destinations[index - 1];
-  const drawProgress = smoothstep(0.08, 0.58, progress);
-
-  safelyApply(() => source.setData(makeRouteFeature(previous, current, drawProgress)));
-}
-
 function hideDestinationOverlays(map) {
   if (map.codexDestinationMarkerElement) {
     map.codexDestinationMarkerElement.style.opacity = '0';
@@ -590,25 +582,6 @@ function getDestinationTourState() {
   };
 }
 
-function buildDestinationKeyframes(index) {
-  const current = destinations[index] || destinations[0];
-  const previousSource =
-    index === 0 ? romeIntro : destinations[index - 1] || current;
-  const currentCenter = destinationToLngLat(current);
-  const previousCenter = destinationToLngLat(previousSource);
-
-  return {
-    earth: {
-      start: { center: previousCenter, ...DESTINATION_FLIGHT.earthStart },
-      mid: { center: currentCenter, ...DESTINATION_FLIGHT.earthMid },
-    },
-    city: {
-      mid: { center: currentCenter, ...DESTINATION_FLIGHT.earthMid },
-      end: { center: currentCenter, ...DESTINATION_FLIGHT.cityEnd },
-    },
-  };
-}
-
 function getDestinationPadding() {
   // Center the destination in the viewport. The info card now floats at the
   // bottom of the screen rather than the side, so the camera focal point sits
@@ -620,6 +593,33 @@ function getDestinationPadding() {
     bottom: Math.round(window.innerHeight * (isNarrow ? 0.30 : 0.18)),
     left: 0,
     right: 0,
+  };
+}
+
+function getDestinationFlightProfile(destination, isNarrow) {
+  // Magellan Landing Site — pulled way back so the southern half of the
+  // Philippines is visible. Uses earth style (city-model has no detail at
+  // this zoom). Slight pitch gives a 3D tilted map view.
+  if (destination.id === 'magellan-landing-site') {
+    return {
+      profile: 'earth',
+      styleUrl: EARTH_STYLE_URL,
+      styleConfig: EARTH_BASEMAP_CONFIG,
+      camera: isNarrow
+        ? { zoom: 5.8, pitch: 25, bearing: 0 }
+        : { zoom: 6.5, pitch: 30, bearing: 0 },
+      curve: 1.1,
+    };
+  }
+
+  return {
+    profile: isNarrow ? 'earth' : 'city-model',
+    styleUrl: isNarrow ? EARTH_STYLE_URL : CITY_MODEL_STYLE_URL,
+    styleConfig: isNarrow ? EARTH_BASEMAP_CONFIG : CITY_BASEMAP_CONFIG,
+    camera: isNarrow
+      ? DESTINATION_FLIGHT.mobileSnap
+      : DESTINATION_VIEW_OVERRIDES[destination.id] || DESTINATION_FLIGHT.cityEnd,
+    curve: isNarrow ? 1.1 : 1.35,
   };
 }
 
@@ -646,7 +646,7 @@ function setRouteLayersOpacity(map, alpha) {
 }
 
 function applyDestinationTourState(map, tourState) {
-  if (map.codexStyleSwitching || map.codexRouteAnimating) return;
+  if (map.codexStyleSwitching) return;
   // Yield to the user while they are actively dragging / rotating the map.
   if (map.codexUserInteracting) return;
 
@@ -659,22 +659,24 @@ function applyDestinationTourState(map, tourState) {
   const reducedMotion = prefersReducedMotion();
   const padding = getDestinationPadding();
   const destinationCenter = destinationToLngLat(destination);
-  const keyframes = buildDestinationKeyframes(tourState.index);
-  const progress = clamp01(tourState.progress);
   const marker = createDestinationMarker(map);
+  const flightProfile = getDestinationFlightProfile(destination, isNarrow);
+  const { profile, styleUrl, styleConfig, camera, curve } = flightProfile;
+  const duration = reducedMotion
+    ? 0
+    : isNarrow
+      ? DESTINATION_MOBILE_FLIGHT_DURATION
+      : DESTINATION_FLIGHT_DURATION;
 
-  // Mobile: skip the city-model swap entirely per spec §9.
-  // Snap to a moderate earth-zoom view of the current destination on entry.
-  if (isNarrow) {
-    if (map.codexSceneProfile !== 'earth') {
-      void switchSceneStyle(map, EARTH_STYLE_URL, EARTH_BASEMAP_CONFIG, 'earth');
-      return;
-    }
-    map.jumpTo({
-      center: destinationCenter,
-      ...DESTINATION_FLIGHT.mobileSnap,
-      padding,
-    });
+  // Mobile keeps the lighter earth profile; most desktop stops use city-model
+  // detail, while island stops can request a true overhead earth view.
+  if (map.codexSceneProfile !== profile) {
+    void switchSceneStyle(map, styleUrl, styleConfig, profile);
+    return;
+  }
+
+  // ── Reduced motion (spec §9): hold the landmark dwell view, no push dive.
+  if (map.codexDestinationActiveIndex === tourState.index) {
     marker.setLngLat(destinationCenter);
     if (map.codexDestinationMarkerElement) {
       map.codexDestinationMarkerElement.style.opacity = '1';
@@ -683,87 +685,46 @@ function applyDestinationTourState(map, tourState) {
     return;
   }
 
-  // Reduced motion: snap directly to the city-end keyframe (mirrors Rome's reduced-motion path).
+  map.codexDestinationActiveIndex = tourState.index;
+  marker.setLngLat(destinationCenter);
+  if (map.codexDestinationMarkerElement) {
+    map.codexDestinationMarkerElement.style.opacity = '1';
+  }
+  setRouteLayersOpacity(map, 0);
+
   if (reducedMotion) {
-    if (map.codexSceneProfile !== 'city-model') {
-      void switchSceneStyle(map, CITY_MODEL_STYLE_URL, CITY_BASEMAP_CONFIG, 'city-model');
-      return;
-    }
     map.jumpTo({
-      ...keyframes.city.end,
+      center: destinationCenter,
+      ...camera,
       padding,
     });
-    marker.setLngLat(destinationCenter);
-    if (map.codexDestinationMarkerElement) {
-      map.codexDestinationMarkerElement.style.opacity = '0';
-    }
-    setRouteLayersOpacity(map, 0);
     return;
   }
 
-  // Full cinematic flight on desktop/tablet.
-  if (progress < DESTINATION_PHASE_SPLIT) {
-    // Earth phase: rotate from previous landmark coords toward current at regional altitude.
-    if (map.codexSceneProfile !== 'earth') {
-      void switchSceneStyle(map, EARTH_STYLE_URL, EARTH_BASEMAP_CONFIG, 'earth');
-      return;
-    }
-    const localT = easeInOutCubic(clamp01(progress / DESTINATION_PHASE_SPLIT));
-    const k = keyframes.earth;
+  // First entry from idle: the camera is at globe zoom (~1.35) and a normal
+  // 2.2s flyTo to zoom 16.6 spends most of its run at zoom 5-12 over Rome,
+  // where city-model LOD hasn't kicked in — that mid-flight frame is the
+  // "satellite Colosseum" the user sees. Pre-jump close to the destination
+  // so the visible flyTo is a short polish move instead of a 15-zoom dive.
+  const comingFromIdle = map.getZoom() < 4;
+  if (comingFromIdle) {
     map.jumpTo({
-      center: lerpLngLatWrapped(k.start.center, k.mid.center, localT),
-      zoom: lerp(k.start.zoom, k.mid.zoom, localT),
-      pitch: lerp(k.start.pitch, k.mid.pitch, localT),
-      bearing: lerp(k.start.bearing, k.mid.bearing, localT),
-      padding,
-    });
-  } else {
-    // City phase: descend onto the landmark with 3D buildings and dramatic pitch.
-    if (map.codexSceneProfile !== 'city-model') {
-      void switchSceneStyle(map, CITY_MODEL_STYLE_URL, CITY_BASEMAP_CONFIG, 'city-model');
-      return;
-    }
-    const localT = easeInOutCubic(
-      clamp01((progress - DESTINATION_PHASE_SPLIT) / (1 - DESTINATION_PHASE_SPLIT)),
-    );
-    const k = keyframes.city;
-    map.jumpTo({
-      center: lerpLngLatWrapped(k.mid.center, k.end.center, localT),
-      zoom: lerp(k.mid.zoom, k.end.zoom, localT),
-      pitch: lerp(k.mid.pitch, k.end.pitch, localT),
-      bearing: lerp(k.mid.bearing, k.end.bearing, localT),
-      padding,
+      center: destinationCenter,
+      zoom: Math.max((camera.zoom ?? 16) - 1.5, 13),
+      pitch: 0,
+      bearing: 0,
     });
   }
 
-  // Marker pin lives in the rotation window only; it gets buried once the camera zooms in.
-  marker.setLngLat(destinationCenter);
-  if (map.codexDestinationMarkerElement) {
-    const markerOpacity =
-      smoothstep(
-        DESTINATION_MARKER_FADE_IN_START,
-        DESTINATION_MARKER_FADE_IN_END,
-        progress,
-      )
-      * (
-        1
-        - smoothstep(
-          DESTINATION_MARKER_FADE_OUT_START,
-          DESTINATION_MARKER_FADE_OUT_END,
-          progress,
-        )
-      );
-    map.codexDestinationMarkerElement.style.opacity = `${markerOpacity}`;
-  }
+  map.flyTo({
+    center: destinationCenter,
+    ...camera,
+    padding,
+    duration: comingFromIdle ? 900 : duration,
+    curve: comingFromIdle ? 1.1 : curve,
+    essential: true,
+  });
 
-  // Flight-path arc draws in the rotation window, then fades out before the city descent.
-  updateDestinationRoute(map, tourState.index, tourState.progress);
-  const arcAlpha = 1 - smoothstep(
-    DESTINATION_ARC_FADE_START,
-    DESTINATION_ARC_FADE_END,
-    progress,
-  );
-  setRouteLayersOpacity(map, arcAlpha);
 }
 
 function prefersReducedMotion() {
@@ -883,6 +844,7 @@ function startEarthScrollMotion(map, onSlideToggle) {
     if (inRomeMode) {
       if (destinationWasActive) {
         hideDestinationOverlays(map);
+        map.codexDestinationActiveIndex = null;
         destinationWasActive = false;
       }
 
@@ -890,6 +852,13 @@ function startEarthScrollMotion(map, onSlideToggle) {
         applyRomeReducedMotionState(map, romeProgress);
       } else {
         applyRomeScrollState(map, romeProgress);
+      }
+
+      // Warm the Colosseum tiles in the offscreen preload map once the
+      // descent is past the earth phase, so the first destination is fully
+      // cached before the user even leaves Rome.
+      if (romeProgress > 0.3) {
+        queueDestinationPreload(destinations[0]);
       }
 
       const wantSlideOpen = romeProgress >= 0.92;
@@ -911,6 +880,13 @@ function startEarthScrollMotion(map, onSlideToggle) {
       }
 
       applyDestinationTourState(map, tourState);
+
+      // Warm the next destination's tiles as soon as the current automatic
+      // flight starts, so the following flyTo has less network work to do.
+      if (tourState.progress > 0.25) {
+        queueDestinationPreload(destinations[tourState.index + 1]);
+      }
+
       destinationWasActive = true;
       frameId = requestAnimationFrame(tick);
       return;
@@ -918,6 +894,7 @@ function startEarthScrollMotion(map, onSlideToggle) {
 
     if (destinationWasActive) {
       hideDestinationOverlays(map);
+      map.codexDestinationActiveIndex = null;
       destinationWasActive = false;
     }
 
@@ -989,7 +966,7 @@ function startEarthScrollMotion(map, onSlideToggle) {
 
 // Known non-fatal runtime errors emitted by Mapbox internals that do not break
 // the map. Most commonly the 3D landmark/mesh worker throws when a tile lacks
-// mesh data (e.g. remote destinations like Cagusuan or San Salvador where the
+// mesh data (e.g. remote destinations like Magellan Landing Site or San Salvador where the
 // city-model style has no 3D landmarks). These should be logged but not shown
 // in the user-facing "setup issue" banner, which is reserved for fatal
 // configuration problems (missing/invalid token, hard load failure).
@@ -1029,6 +1006,180 @@ async function switchSceneStyle(map, styleUrl, config, profile) {
   } finally {
     map.codexStyleSwitching = false;
   }
+}
+
+// ─── Offscreen preload map ────────────────────────────────────────────────
+// Tile + 3D landmark fetches are the dominant source of stutter when the
+// main map teleports between destinations. We keep one hidden offscreen
+// mapbox instance permanently parked at city-model scale and `jumpTo` it
+// to the *next* destination while the user is still dwelling on the
+// current one. The tiles + meshes it pulls down land in the browser's HTTP
+// cache, so the next automatic `flyTo` has less network work to do and
+// the transition stays smooth.
+//
+// Implementation notes:
+//   - One single shared preload map for the page lifetime (lazy init).
+//   - 640x480 viewport — large enough to request every tile the main
+//     viewport will need at the same zoom, small enough to keep GPU + tile
+//     count down.
+//   - Skipped on mobile (mobile uses the earth style, no
+//     city-model tiles to preload) and under reduced-motion.
+//   - Serial queue: only one preload runs at a time (a single map can only
+//     be at one location). Newer requests for already-cached destinations
+//     are deduped.
+//   - Hard 8s safety timeout on every preload so a slow tile never stalls
+//     the queue.
+let preloadMapInstance = null;
+let preloadMapContainer = null;
+const preloadedDestinationIds = new Set();
+const preloadInFlight = new Map();
+const preloadQueue = [];
+let preloadQueueRunning = false;
+
+function ensurePreloadMap() {
+  if (typeof window === 'undefined') return null;
+  if (preloadMapInstance) return preloadMapInstance;
+  if (window.innerWidth < 768) return null;
+  if (prefersReducedMotion()) return null;
+  if (!mapboxgl.accessToken) return null;
+
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText =
+    'position:fixed;left:-9999px;top:-9999px;width:640px;height:480px;visibility:hidden;pointer-events:none;opacity:0;z-index:-9999;';
+  document.body.appendChild(host);
+  preloadMapContainer = host;
+
+  try {
+    preloadMapInstance = new mapboxgl.Map({
+      container: host,
+      style: CITY_MODEL_STYLE_URL,
+      center: [12.4922, 41.8902],
+      zoom: 16.6,
+      pitch: 76,
+      bearing: -32,
+      antialias: false,
+      interactive: false,
+      attributionControl: false,
+      config: {
+        basemap: CITY_BASEMAP_CONFIG,
+      },
+    });
+
+    preloadMapInstance.on('style.load', () => {
+      enhanceScene(preloadMapInstance, CITY_BASEMAP_CONFIG);
+    });
+
+    preloadMapInstance.on('error', (event) => {
+      const msg = event?.error?.message || '';
+      // Preload is best-effort — mute non-fatal mesh / landmark warnings.
+      if (!isNonFatalMapboxError(msg) && typeof console !== 'undefined') {
+        console.warn('[Mapbox preload]', msg);
+      }
+    });
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[Mapbox preload] init failed', err);
+    }
+    if (preloadMapContainer?.parentNode) {
+      preloadMapContainer.parentNode.removeChild(preloadMapContainer);
+    }
+    preloadMapInstance = null;
+    preloadMapContainer = null;
+  }
+
+  return preloadMapInstance;
+}
+
+function preloadDestinationTiles(destination) {
+  if (!destination) return Promise.resolve();
+  const flightProfile = getDestinationFlightProfile(destination, false);
+  if (flightProfile.profile !== 'city-model') {
+    return Promise.resolve();
+  }
+  if (preloadedDestinationIds.has(destination.id)) return Promise.resolve();
+  if (preloadInFlight.has(destination.id)) return preloadInFlight.get(destination.id);
+
+  const map = ensurePreloadMap();
+  if (!map) return Promise.resolve();
+
+  const promise = new Promise((resolve) => {
+    let resolved = false;
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      preloadedDestinationIds.add(destination.id);
+      preloadInFlight.delete(destination.id);
+      resolve();
+    };
+
+    const doJump = () => {
+      try {
+        map.jumpTo({
+          center: [destination.lon, destination.lat],
+          ...flightProfile.camera,
+        });
+        map.once('idle', finish);
+      } catch {
+        finish();
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      doJump();
+    } else {
+      map.once('style.load', doJump);
+    }
+
+    setTimeout(finish, 8000);
+  });
+
+  preloadInFlight.set(destination.id, promise);
+  return promise;
+}
+
+async function runPreloadQueue() {
+  if (preloadQueueRunning) return;
+  preloadQueueRunning = true;
+  try {
+    while (preloadQueue.length > 0) {
+      const dest = preloadQueue.shift();
+      if (!dest || preloadedDestinationIds.has(dest.id)) continue;
+      await preloadDestinationTiles(dest);
+    }
+  } finally {
+    preloadQueueRunning = false;
+  }
+}
+
+function queueDestinationPreload(destination) {
+  if (!destination) return;
+  if (getDestinationFlightProfile(destination, false).profile !== 'city-model') return;
+  if (preloadedDestinationIds.has(destination.id)) return;
+  if (preloadInFlight.has(destination.id)) return;
+  if (preloadQueue.some((d) => d.id === destination.id)) return;
+  preloadQueue.push(destination);
+  void runPreloadQueue();
+}
+
+function disposePreloadMap() {
+  preloadQueue.length = 0;
+  preloadQueueRunning = false;
+  preloadInFlight.clear();
+  preloadedDestinationIds.clear();
+
+  if (preloadMapInstance) {
+    try {
+      preloadMapInstance.remove();
+    } catch {
+      // ignore
+    }
+    preloadMapInstance = null;
+  }
+  if (preloadMapContainer?.parentNode) {
+    preloadMapContainer.parentNode.removeChild(preloadMapContainer);
+  }
+  preloadMapContainer = null;
 }
 
 export default function MapboxEarth() {
@@ -1156,6 +1307,7 @@ export default function MapboxEarth() {
       window.romeScrollProgress = 0;
       window.destinationTourActive = false;
       window.destinationTourState = { index: 0, progress: 0 };
+      m.codexDestinationActiveIndex = null;
       hideDestinationOverlays(m);
       m.codexRouteAnimating = true;
 
@@ -1186,6 +1338,7 @@ export default function MapboxEarth() {
       mapCanvas.removeEventListener('touchend', endInteraction);
       mapCanvas.removeEventListener('touchcancel', endInteraction);
       stopEarthScrollMotion();
+      disposePreloadMap();
       map.remove();
       mapRef.current = null;
     };

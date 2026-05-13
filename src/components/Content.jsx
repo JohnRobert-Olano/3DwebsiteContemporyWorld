@@ -122,18 +122,18 @@ const cardSide = (i) => (i % 2 === 0 ? 'right' : 'left');
 /* ────────────────────────────────────────────────────────────
    Component
    ──────────────────────────────────────────────────────────── */
-const ROME_NAV = { id: 'rome', navLabel: 'Rome Intro' };
-
-const setDestinationTourState = (index, progress) => {
+const setDestinationTourState = (index) => {
   window.destinationTourActive = true;
   window.destinationTourState = {
     index,
-    progress,
+    progress: 1,
+    requestedAt: performance.now(),
   };
 };
 
 const buildLabelFor = (destination) => {
   if (destination.id === 'world-trade-center-nyc') return 'Rebuilt';
+  if (destination.id === 'magellan-landing-site') return 'Type';
   if (destination.built === 'Natural island') return 'Type';
   return 'Built';
 };
@@ -230,129 +230,84 @@ export default function Content({ lenisRef }) {
         });
       });
 
-      // Rome — pinned section that scrub-drives the Mapbox camera flight
-      const romeIndex = sections.length;
-      ScrollTrigger.create({
-        trigger: '.rome-section',
-        start: 'top top',
-        end: '+=300%',
-        pin: true,
-        scrub: 1,
-        onEnter: () => {
-          setActiveSection(romeIndex);
-          setActiveJourneyIndex(0);
-          window.romeModeActive = true;
-          window.destinationTourActive = false;
-          window.globeTargetDirection = 0;
-        },
-        onEnterBack: () => {
-          setActiveSection(romeIndex);
-          setActiveJourneyIndex(0);
-          window.romeModeActive = true;
-          window.destinationTourActive = false;
-          window.globeTargetDirection = 0;
-        },
-        onUpdate: (self) => {
-          window.romeScrollProgress = self.progress;
-        },
-        onLeave: () => {
-          window.romeModeActive = false;
-          window.romeScrollProgress = 0;
-        },
-        onLeaveBack: () => {
-          window.romeModeActive = false;
-          window.romeScrollProgress = 0;
-        },
-      });
-
-      // Fade the "Rome" title out as the camera descends so it doesn't obscure the Colosseum
-      gsap.to('.rome-title-wrapper', {
-        opacity: 0,
-        y: -40,
-        scrollTrigger: {
-          trigger: '.rome-section',
-          start: 'top top',
-          end: '+=180%',
-          scrub: 1,
-        },
-      });
-
       const destinationCards = gsap.utils.toArray('.destination-card');
 
       destinationCards.forEach((card, i) => {
         const panel = card.closest('.destination-section');
         if (!panel) return;
+        const revealEls = card.querySelectorAll('.destination-reveal');
 
         gsap.set(card, {
           opacity: 0,
           y: 60,
+          scale: 1,
           xPercent: -50,
         });
+        gsap.set(revealEls, { opacity: 0, y: 18 });
 
-        const tl = gsap.timeline({
-          scrollTrigger: {
-            trigger: panel,
-            start: 'top top',
-            end: '+=180%',
-            scrub: 1,
-            pin: true,
-            onEnter: () => {
-              setActiveSection(romeIndex + i + 1);
-              setActiveJourneyIndex(i + 1);
-              window.romeModeActive = false;
-              setDestinationTourState(i, 0);
-            },
-            onEnterBack: () => {
-              setActiveSection(romeIndex + i + 1);
-              setActiveJourneyIndex(i + 1);
-              window.romeModeActive = false;
-              setDestinationTourState(i, 1);
-            },
-            onUpdate: (self) => {
-              setDestinationTourState(i, self.progress);
-            },
-            onLeave: () => {
-              setDestinationTourState(i, 1);
-            },
-            onLeaveBack: () => {
-              if (i === 0) {
-                window.destinationTourActive = false;
-                setActiveJourneyIndex(0);
-              } else {
-                setDestinationTourState(i - 1, 1);
-                setActiveJourneyIndex(i);
-              }
-            },
-          },
-        });
+        // Entering a destination panel is enough to launch the full card
+        // reveal and Mapbox flight. The animation is no longer scrubbed by
+        // continued wheel/touch movement.
+        const revealCard = () => {
+          setActiveSection(sections.length + i);
+          setActiveJourneyIndex(i);
+          setDestinationTourState(i);
 
-        tl.to(card, {
-          opacity: 1,
-          y: 0,
-          duration: 0.75,
-          ease: 'power2.out',
-        });
-
-        tl.fromTo(
-          card.querySelectorAll('.destination-reveal'),
-          { opacity: 0, y: 22 },
-          {
+          gsap.killTweensOf([card, ...revealEls]);
+          gsap.set(revealEls, { opacity: 0, y: 18 });
+          gsap.to(card, {
             opacity: 1,
             y: 0,
-            duration: 1.35,
+            scale: 1,
+            duration: 0.34,
             ease: 'power2.out',
-            stagger: 0.24,
+            overwrite: true,
+          });
+          gsap.to(revealEls, {
+            opacity: 1,
+            y: 0,
+            duration: 0.46,
+            ease: 'power2.out',
+            stagger: 0.04,
+            overwrite: true,
+          });
+        };
+
+        const hideCard = (y = -24) => {
+          gsap.killTweensOf([card, ...revealEls]);
+          gsap.to(card, {
+            opacity: 0,
+            y,
+            scale: 1,
+            duration: 0.24,
+            ease: 'power2.in',
+            overwrite: true,
+          });
+        };
+
+        // Keep the panel pinned while the independent flight finishes, then
+        // release normally on the next scroll.
+        ScrollTrigger.create({
+          trigger: panel,
+          start: 'top top',
+          end: '+=85%',
+          pin: true,
+          anticipatePin: 1,
+          onEnter: revealCard,
+          onEnterBack: revealCard,
+          onLeave: () => hideCard(-24),
+          onLeaveBack: () => {
+            hideCard(40);
+            if (i === 0) {
+              // Scrolling back past the first destination (Colosseum) —
+              // no previous journey stop; clear the active nav highlight.
+              window.destinationTourActive = false;
+              setActiveJourneyIndex(-1);
+            } else {
+              setDestinationTourState(i - 1);
+              setActiveJourneyIndex(i - 1);
+            }
           },
-          '<+=0.35',
-        );
-
-        tl.to({}, { duration: 1.1 });
-
-        tl.to(card, {
-          opacity: 0,
-          y: -40,
-          duration: 0.75,
-          ease: 'power2.in',
         });
       });
     }, containerRef);
@@ -417,7 +372,7 @@ export default function Content({ lenisRef }) {
         className="fixed bottom-4 left-4 right-4 z-50 flex gap-2 overflow-x-auto rounded-lg border border-white/10 bg-black/70 p-2 backdrop-blur-xl pointer-events-auto lg:hidden"
         aria-label="Mobile section navigation"
       >
-        {[...sections, ROME_NAV].map((sec, i) => (
+        {sections.map((sec, i) => (
           <button
             key={sec.id}
             onClick={() => scrollTo(i)}
@@ -641,29 +596,6 @@ export default function Content({ lenisRef }) {
           </section>
         );
       })}
-
-      {/* ─── ROME SECTION — pinned, scroll-scrubs the camera flight ─── */}
-      <section
-        id="rome"
-        className="rome-section panel-section relative w-full overflow-visible"
-        style={{ minHeight: '100vh' }}
-        aria-labelledby="rome-title"
-      >
-        <div className="rome-title-wrapper absolute inset-0 flex flex-col items-center justify-center px-4 text-center pointer-events-none">
-          <span className="rounded-md border border-[#0A6ED3]/50 bg-[#0A6ED3]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0] drop-shadow-lg">
-            Final Destination
-          </span>
-          <h2
-            id="rome-title"
-            className="mt-5 font-sans text-5xl font-bold uppercase tracking-normal text-white drop-shadow-2xl sm:text-7xl md:text-8xl"
-          >
-            Rome
-          </h2>
-          <p className="mt-4 max-w-md text-sm leading-6 text-gray-300 sm:text-base">
-            Scroll to descend through the atmosphere
-          </p>
-        </div>
-      </section>
 
       {destinations.map((destination, index) => {
         const stopNumber = String(index + 1).padStart(2, '0');

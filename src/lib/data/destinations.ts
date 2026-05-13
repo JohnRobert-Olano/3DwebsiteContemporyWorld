@@ -22,37 +22,41 @@ export const destinations = [
     significance: 'Renaissance sacred architecture',
   },
   {
-    id: 'fortifications-xian',
-    name: "Fortifications of Xi'An",
-    location: "Xi'An, China",
-    built: '1370, Ming Dynasty',
-    lat: 34.2611,
-    lon: 108.9486,
+    id: 'xian-city-wall',
+    name: "Xi'an City Wall",
+    location: "Xi'an, China",
+    built: '1374-1378, Ming Dynasty',
+    // Real-world South Gate (Yongning Gate / 永宁门). Mapbox's basemap renders
+    // the actual gate complex slightly north-northwest of the central-avenue
+    // intersection — these coords align the pin with the rendered gatehouse
+    // and barbican, not with the road south of it.
+    lat: 34.2496,
+    lon: 108.9472,
     about:
-      'One of the oldest, largest, and best-preserved Chinese city walls. A symbol of imperial Chinese defense.',
-    significance: 'Imperial Chinese defense system',
+      'Ming-era city wall enclosing the historic core of Xi\'an, one of the largest and best-preserved ancient city walls in China.',
+    significance: 'Imperial Chinese defense and urban heritage',
   },
   {
     id: 'san-salvador-island',
     name: 'San Salvador Island',
-    location: 'Zambales, Philippines',
+    location: 'Masinloc, Zambales, Philippines',
     built: 'Natural island',
-    lat: 14.7833,
-    lon: 120.15,
+    lat: 15.5087,
+    lon: 119.9114,
     about:
       'A small tropical island off the coast of Masinloc, known for pristine waters, a marine sanctuary, and sunset views.',
     significance: 'Coastal ecology and local marine heritage',
   },
   {
-    id: 'cagusuan-church-plaza',
-    name: 'Cagusuan Church & Plaza',
-    location: 'Guiuan, Eastern Samar, Philippines',
-    built: '17th century, Spanish colonial era',
-    lat: 11.0286,
-    lon: 125.7297,
+    id: 'magellan-landing-site',
+    name: 'Magellan Landing Site',
+    location: 'Barangay Masao, Butuan City, Philippines',
+    built: 'Historical anchorage',
+    lat: 8.999434,
+    lon: 125.483603,
     about:
-      'Historic Spanish-era Catholic church with cultural significance to the Eastern Samar community.',
-    significance: 'Spanish colonial religious heritage',
+      'Coastal memorial in Barangay Masao associated with local accounts of Ferdinand Magellan\'s 1521 anchorage and landing in Butuan.',
+    significance: 'Early contact-era maritime history in Mindanao',
   },
   {
     id: 'royal-palace-madrid',
@@ -141,13 +145,13 @@ export const romeIntro = {
   lon: 12.4964,
 };
 
-export const journeyNavItems = [
-  romeIntro,
-  ...destinations.map((destination) => ({
-    id: destination.id,
-    name: destination.name,
-    location: destination.location,
-    lat: destination.lat,
-    lon: destination.lon,
-  })),
-];
+// Rome Intro removed from the nav — Colosseum (destinations[0]) is now the
+// first journey stop, so the nav indices line up 1:1 with the destinations
+// array.
+export const journeyNavItems = destinations.map((destination) => ({
+  id: destination.id,
+  name: destination.name,
+  location: destination.location,
+  lat: destination.lat,
+  lon: destination.lon,
+}));
