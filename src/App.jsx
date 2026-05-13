@@ -5,6 +5,7 @@ import MapboxEarth from './components/MapboxEarth';
 import Content from './components/Content';
 import LoadingScreen from './components/LoadingScreen';
 import IntroSequence from './components/IntroSequence';
+import ScrollProgress from './components/ScrollProgress';
 
 function App() {
   const [isResetting, setIsResetting] = useState(false);
@@ -25,6 +26,7 @@ function App() {
       infinite: false,
     });
     lenisRef.current = lenis;
+    window.codexLenis = lenis;
     // Hold scroll while the intro plays so the user can't bail out mid-reveal
     lenis.stop();
 
@@ -36,6 +38,9 @@ function App() {
 
     return () => {
       lenis.destroy();
+      if (window.codexLenis === lenis) {
+        delete window.codexLenis;
+      }
     };
   }, []);
 
@@ -118,13 +123,16 @@ function App() {
         </div>
       </nav>
 
+      {/* Scroll progress bar (top sliver) */}
+      <ScrollProgress />
+
       {/* Immersive 3D Earth Layer (Fixed Background) */}
       <Suspense fallback={<LoadingScreen />}>
         <MapboxEarth />
       </Suspense>
 
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}
-      <Content />
+      <Content lenisRef={lenisRef} />
     </main>
   );
 }
