@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
+import { destinations, journeyNavItems } from '../lib/data/destinations';
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
@@ -121,14 +122,53 @@ const cardSide = (i) => (i % 2 === 0 ? 'right' : 'left');
 /* ────────────────────────────────────────────────────────────
    Component
    ──────────────────────────────────────────────────────────── */
-export default function Content() {
+const setDestinationTourState = (index) => {
+  window.destinationTourActive = true;
+  window.destinationTourState = {
+    index,
+    progress: 1,
+    requestedAt: performance.now(),
+  };
+};
+
+const dispatchLandmarkActive = (id) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('landmark:active', { detail: { id } }),
+  );
+};
+
+const buildLabelFor = (destination) => {
+  if (destination.id === 'world-trade-center-nyc') return 'Rebuilt';
+  if (destination.id === 'magellan-landing-site') return 'Type';
+  if (destination.built === 'Natural island') return 'Type';
+  return 'Built';
+};
+
+export default function Content({ lenisRef }) {
   const containerRef = useRef(null);
   const [activeSection, setActiveSection] = useState(-1);
+  const [activeJourneyIndex, setActiveJourneyIndex] = useState(-1);
+  const [isJourneyMenuOpen, setIsJourneyMenuOpen] = useState(false);
 
-  /* ── ScrollTrigger wiring ─────────────────────────────────
-     NO pin. NO scrub. Pure callback-driven timelines.
-     ───────────────────────────────────────────────────────── */
+  /* ── ScrollTrigger wiring ───────────────────────────────── */
   useEffect(() => {
+    window.romeModeActive = false;
+    window.romeScrollProgress = 0;
+    window.destinationTourActive = false;
+    window.destinationTourState = { index: 0, progress: 0 };
+
+    const reducedMotion =
+      typeof window !== 'undefined'
+      && window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reducedMotion) {
+      // No scroll-scrubbed animations — content stays statically visible
+      window.globeTargetDirection = 0;
+      return undefined;
+    }
+
     const ctx = gsap.context(() => {
       const cards = gsap.utils.toArray('.pingpong-card');
 
@@ -146,7 +186,7 @@ export default function Content() {
           scrollTrigger: {
             trigger: panel,
             start: 'top top',
-            end: '+=150%', // Pin the section for 1.5x viewport height
+            end: '+=150%',
             scrub: 1,
             pin: true,
             onEnter: () => {
@@ -166,7 +206,6 @@ export default function Content() {
           },
         });
 
-        // 1. Fade in and slide the card into place
         tl.to(card, {
           opacity: 1,
           x: 0,
@@ -174,7 +213,6 @@ export default function Content() {
           ease: 'power2.out',
         });
 
-        // 2. Stagger text appearance over scroll
         const staggerEls = card.querySelectorAll('.stagger-item');
         tl.fromTo(
           staggerEls,
@@ -186,13 +224,11 @@ export default function Content() {
             ease: 'power2.out',
             stagger: 0.5,
           },
-          "<+=0.5" // Start slightly after card begins entering
+          '<+=0.5',
         );
 
-        // 3. Hold the complete card visible for some scroll distance
         tl.to({}, { duration: 1.5 });
 
-        // 4. Fade out and slide the card out
         tl.to(card, {
           opacity: 0,
           x: side === 'right' ? 50 : -50,
@@ -201,29 +237,141 @@ export default function Content() {
         });
       });
 
-      // Add a dedicated trigger for the footer spacer so we know we hit the absolute bottom
-      ScrollTrigger.create({
-        trigger: '.footer-spacer',
-        start: 'top 80%', // Triggers when the top of the footer is 80% down the screen
-        onEnter: () => { window.isAtEnd = true; },
-        onLeaveBack: () => { window.isAtEnd = false; }
+      const destinationCards = gsap.utils.toArray('.destination-card');
+
+      destinationCards.forEach((card, i) => {
+        const panel = card.closest('.destination-section');
+        if (!panel) return;
+        const revealEls = card.querySelectorAll('.destination-reveal');
+        const destinationId = destinations[i]?.id;
+
+        gsap.set(card, {
+          opacity: 0,
+          y: 60,
+          scale: 1,
+          xPercent: -50,
+        });
+        gsap.set(revealEls, { opacity: 0, y: 18 });
+
+        // Entering a destination panel is enough to launch the full card
+        // reveal and Mapbox flight. The animation is no longer scrubbed by
+        // continued wheel/touch movement.
+        const revealCard = () => {
+          setActiveSection(sections.length + i);
+          setActiveJourneyIndex(i);
+          setDestinationTourState(i);
+          dispatchLandmarkActive(destinationId);
+
+          gsap.killTweensOf([card, ...revealEls]);
+          gsap.set(revealEls, { opacity: 0, y: 18 });
+          gsap.to(card, {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.34,
+            ease: 'power2.out',
+            overwrite: true,
+          });
+          gsap.to(revealEls, {
+            opacity: 1,
+            y: 0,
+            duration: 0.46,
+            ease: 'power2.out',
+            stagger: 0.04,
+            overwrite: true,
+          });
+        };
+
+        const hideCard = (y = -24) => {
+          gsap.killTweensOf([card, ...revealEls]);
+          gsap.to(card, {
+            opacity: 0,
+            y,
+            scale: 1,
+            duration: 0.24,
+            ease: 'power2.in',
+            overwrite: true,
+          });
+        };
+
+        // Keep the panel pinned while the independent flight finishes, then
+        // release normally on the next scroll.
+        ScrollTrigger.create({
+          trigger: panel,
+          start: 'top top',
+          end: '+=85%',
+          pin: true,
+          anticipatePin: 1,
+          onEnter: revealCard,
+          onEnterBack: revealCard,
+          onLeave: () => {
+            hideCard(-24);
+            dispatchLandmarkActive(null);
+          },
+          onLeaveBack: () => {
+            hideCard(40);
+            if (i === 0) {
+              // Scrolling back past the first destination (Colosseum) —
+              // no previous journey stop; clear the active nav highlight.
+              window.destinationTourActive = false;
+              setActiveJourneyIndex(-1);
+              dispatchLandmarkActive(null);
+            } else {
+              setDestinationTourState(i - 1);
+              setActiveJourneyIndex(i - 1);
+              dispatchLandmarkActive(destinations[i - 1]?.id ?? null);
+            }
+          },
+        });
       });
     }, containerRef);
 
-    return () => ctx.revert();
+    return () => {
+      ctx.revert();
+      window.romeModeActive = false;
+      window.destinationTourActive = false;
+    };
   }, []);
 
   /* ── Smooth scrollTo for side-nav clicks ────────────────── */
+  const scrollToElement = useCallback((target, offsetY = 0) => {
+    const lenis = lenisRef?.current || window.codexLenis;
+    if (lenis?.scrollTo) {
+      lenis.scrollTo(target, {
+        offset: -offsetY,
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      });
+      return;
+    }
+
+    gsap.to(window, {
+      duration: 1.2,
+      scrollTo: { y: target, offsetY },
+      ease: 'power3.inOut',
+    });
+  }, [lenisRef]);
+
   const scrollTo = useCallback((index) => {
     const panels = document.querySelectorAll('.panel-section');
     if (panels[index]) {
-      gsap.to(window, {
-        duration: 1.2,
-        scrollTo: { y: panels[index], offsetY: window.innerHeight * 0.15 },
-        ease: 'power3.inOut',
-      });
+      scrollToElement(panels[index], window.innerHeight * 0.15);
     }
-  }, []);
+  }, [scrollToElement]);
+
+  const scrollToJourney = useCallback((index) => {
+    const target =
+      index === 0
+        ? document.getElementById('rome')
+        : document.getElementById(`destination-${destinations[index - 1]?.id}`);
+
+    if (target) {
+      scrollToElement(target, 0);
+      setIsJourneyMenuOpen(false);
+    }
+  }, [scrollToElement]);
+
+  const journeyNavActive = activeSection >= sections.length;
 
   /* ── Render ──────────────────────────────────────────────── */
   return (
@@ -248,12 +396,142 @@ export default function Content() {
                 : 'border-white/10 bg-white/5 text-gray-400'
             }`}
             aria-current={activeSection === i ? 'step' : undefined}
-            aria-label={`Jump to ${sec.title}`}
+            aria-label={`Jump to ${sec.navLabel}`}
           >
             {String(i + 1).padStart(2, '0')} {sec.navLabel}
           </button>
         ))}
       </nav>
+
+      <nav
+        className={`fixed right-4 top-1/2 z-50 hidden w-56 -translate-y-1/2 flex-col gap-1 rounded-lg border border-white/10 bg-black/55 p-2 shadow-2xl backdrop-blur-xl transition-opacity duration-300 pointer-events-auto lg:flex ${
+          journeyNavActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        aria-label="Destination index"
+      >
+        {journeyNavItems.map((item, i) => {
+          const isActive = activeJourneyIndex === i;
+          const isPast = activeJourneyIndex > i;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              title={item.name}
+              onClick={() => scrollToJourney(i)}
+              className={`group relative flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3] ${
+                isActive ? 'bg-[#0A6ED3]/18 text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'
+              }`}
+              aria-current={isActive ? 'step' : undefined}
+              aria-label={`Jump to ${item.name}`}
+            >
+              <span
+                className={`h-2.5 w-2.5 shrink-0 rounded-full border transition-all duration-200 ${
+                  isActive
+                    ? 'scale-125 border-[#7DB7F0] bg-[#7DB7F0] shadow-[0_0_14px_rgba(125,183,240,0.8)]'
+                    : isPast
+                      ? 'border-[#7DB7F0]/40 bg-[#7DB7F0]/45'
+                      : 'border-white/35 bg-transparent'
+                }`}
+                aria-hidden="true"
+              />
+              <span className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.12em]">
+                {item.name}
+              </span>
+              <span className="pointer-events-none absolute right-full top-1/2 mr-3 max-w-52 -translate-y-1/2 rounded-md border border-white/10 bg-black/80 px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-xl backdrop-blur-xl transition-opacity duration-200 group-hover:opacity-100">
+                {item.name}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <button
+        type="button"
+        onClick={() => setIsJourneyMenuOpen(true)}
+        className={`fixed right-4 top-24 z-50 cursor-pointer rounded-full border border-white/10 bg-black/65 p-3 text-white shadow-xl backdrop-blur-xl transition-opacity duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3] lg:hidden ${
+          journeyNavActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        aria-label="Open destination index"
+        aria-expanded={isJourneyMenuOpen}
+      >
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <line x1="4" y1="7" x2="20" y2="7" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="17" x2="20" y2="17" />
+        </svg>
+      </button>
+
+      {isJourneyMenuOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/90 p-5 backdrop-blur-xl pointer-events-auto lg:hidden">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="font-sans text-sm font-bold uppercase tracking-[0.22em] text-white">
+              World Tour
+            </h2>
+            <button
+              type="button"
+              onClick={() => setIsJourneyMenuOpen(false)}
+              className="cursor-pointer rounded-full border border-white/10 p-2 text-gray-300 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3]"
+              aria-label="Close destination index"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div className="mt-8 grid gap-2">
+            {journeyNavItems.map((item, i) => {
+              const isActive = activeJourneyIndex === i;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => scrollToJourney(i)}
+                  className={`flex cursor-pointer items-center justify-between gap-4 rounded-md border px-4 py-3 text-left transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3] ${
+                    isActive
+                      ? 'border-[#0A6ED3]/70 bg-[#0A6ED3]/20 text-white'
+                      : 'border-white/10 bg-white/5 text-gray-300'
+                  }`}
+                  aria-current={isActive ? 'step' : undefined}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">
+                      {item.name}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-gray-500">
+                      {item.location}
+                    </span>
+                  </span>
+                  <span className="text-xs font-semibold text-[#7DB7F0]">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ─── HERO SPACER (initial view before first section) ─── */}
       <div className="h-[70vh]" aria-hidden="true" />
@@ -333,8 +611,77 @@ export default function Content() {
         );
       })}
 
+      {destinations.map((destination, index) => {
+        const stopNumber = String(index + 1).padStart(2, '0');
+
+        return (
+          <section
+            id={`destination-${destination.id}`}
+            key={destination.id}
+            className="destination-section panel-section relative w-full overflow-visible"
+            style={{ minHeight: '100vh' }}
+            aria-labelledby={`${destination.id}-title`}
+          >
+            <div
+              className="destination-card pointer-events-auto absolute bottom-6 left-1/2 z-20 box-border w-[min(92vw,44rem)] max-h-[44vh] overflow-y-auto sm:bottom-8 sm:max-h-[42vh] lg:bottom-10 lg:max-h-[36vh] lg:w-[min(78vw,46rem)] xl:w-[min(64vw,52rem)]"
+              style={{ willChange: 'transform, opacity', transform: 'translateX(-50%)' }}
+            >
+              <article className="rounded-lg border border-[#0A6ED3]/30 bg-black/70 p-4 shadow-2xl backdrop-blur-xl sm:p-5 lg:p-6">
+                <div className="destination-reveal flex flex-wrap items-center gap-3">
+                  <span className="rounded-md border border-[#0A6ED3]/50 bg-[#0A6ED3]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+                    Destination {stopNumber}
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    {destination.location}
+                  </span>
+                </div>
+
+                <h2
+                  id={`${destination.id}-title`}
+                  className="destination-reveal mt-4 font-sans text-2xl font-bold uppercase leading-none tracking-normal text-white drop-shadow-lg sm:text-3xl lg:text-4xl"
+                >
+                  {destination.name}
+                </h2>
+
+                <dl className="destination-reveal mt-5 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+                      {buildLabelFor(destination)}
+                    </dt>
+                    <dd className="mt-1 text-sm leading-6 text-gray-200">
+                      {destination.built}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+                      Location
+                    </dt>
+                    <dd className="mt-1 text-sm leading-6 text-gray-200">
+                      {destination.location}
+                    </dd>
+                  </div>
+                </dl>
+
+                <p className="destination-reveal mt-4 break-words text-sm leading-6 text-gray-300 sm:text-base sm:leading-7">
+                  {destination.about}
+                </p>
+
+                <div className="destination-reveal mt-5 border-t border-white/10 pt-4">
+                  <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                    Significance
+                  </h3>
+                  <p className="mt-2 break-words text-sm leading-6 text-gray-300">
+                    {destination.significance}
+                  </p>
+                </div>
+              </article>
+            </div>
+          </section>
+        );
+      })}
+
       {/* ─── FOOTER SPACER ─── */}
-      <div className="footer-spacer h-[100vh]" aria-hidden="true" />
+      <div className="footer-spacer h-[60vh]" aria-hidden="true" />
     </div>
   );
 }

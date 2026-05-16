@@ -34,3 +34,217 @@ h1, h2, h3, h4, h5, h6, .font-sans {
 .mapboxgl-ctrl-bottom-right {
   display: none !important;
 }
+
+.destination-map-marker {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  will-change: opacity;
+}
+
+.destination-map-marker__core,
+.destination-map-marker__pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+}
+
+.destination-map-marker__core {
+  width: 10px;
+  height: 10px;
+  background: #F97316;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.95);
+}
+
+.destination-map-marker__pulse {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(249, 115, 22, 0.82);
+  animation: destination-marker-pulse 1.4s ease-out infinite;
+}
+
+.destination-card {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 183, 240, 0.45) rgba(255, 255, 255, 0.06);
+}
+
+.destination-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.destination-card::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.destination-card::-webkit-scrollbar-thumb {
+  background: rgba(125, 183, 240, 0.45);
+  border-radius: 9999px;
+}
+
+@keyframes destination-marker-pulse {
+  0% {
+    opacity: 0.88;
+    transform: translate(-50%, -50%) scale(0.45);
+  }
+
+  70% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.6);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .destination-map-marker__pulse {
+    animation: none;
+  }
+}
+
+/* ─── Landmark Event Overlay ──────────────────────────────────────────────
+   Foreground PNG cutouts that float above the Mapbox canvas but below the
+   destination card and navigation. Each scene is data-driven; the figures
+   are positioned absolutely against this fixed full-screen layer. */
+.landmark-event-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.landmark-event-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Wrapper owns position + parallax (CSS transform).
+   The inner <img> owns enter/leave (GSAP-driven inline transform). */
+.event-figure-wrapper {
+  position: absolute;
+  width: var(--ev-w-mobile, 34vw);
+  pointer-events: none;
+  will-change: transform;
+  transform: translate3d(var(--ev-parallax-x, 0px), var(--ev-parallax-y, 0px), 0);
+}
+
+.event-figure-wrapper.event-figure-center {
+  transform: translate3d(
+    calc(-50% + var(--ev-parallax-x, 0px)),
+    var(--ev-parallax-y, 0px),
+    0
+  );
+}
+
+@media (min-width: 1024px) {
+  .event-figure-wrapper {
+    width: var(--ev-w-desktop, 18vw);
+  }
+}
+
+.event-figure-wrapper.event-figure-left {
+  margin-left: clamp(0.5rem, 2vw, 2.5rem);
+}
+
+.event-figure-wrapper.event-figure-right {
+  margin-right: clamp(0.5rem, 2vw, 2.5rem);
+}
+
+.event-figure {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform, opacity, filter;
+  transition: filter 400ms ease;
+}
+
+.event-figure-foreground .event-figure {
+  filter: drop-shadow(0 30px 40px rgba(0, 0, 0, 0.55))
+          drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45));
+  z-index: 2;
+}
+
+/* Visible silhouette stand-in for missing PNGs. Replace by dropping a real
+   asset into /public/events/<destination-id>/<filename>.png — the <img>
+   takes over automatically and this rule does nothing. */
+.event-figure-placeholder {
+  aspect-ratio: 3 / 5;
+  border-radius: 28% 28% 12% 12% / 38% 38% 8% 8%;
+  background:
+    radial-gradient(120% 60% at 50% 18%, rgba(10, 110, 211, 0.55), rgba(10, 110, 211, 0.05) 60%, transparent 75%),
+    linear-gradient(180deg, rgba(125, 183, 240, 0.42), rgba(10, 110, 211, 0.18) 50%, rgba(0, 0, 0, 0.65));
+  border: 1px dashed rgba(125, 183, 240, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.75rem;
+}
+
+.event-figure-placeholder-label {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  max-width: 90%;
+  line-height: 1.2;
+}
+
+.event-figure-background .event-figure {
+  filter: blur(2px) saturate(0.9) brightness(0.85)
+          drop-shadow(0 24px 36px rgba(0, 0, 0, 0.45));
+  z-index: 1;
+  opacity: 0.85;
+}
+
+.event-figure-hide-mobile {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .event-figure-hide-mobile {
+    display: block;
+  }
+}
+
+/* On small screens, drop the right-side figure so the destination card
+   (centered, bottom) doesn't get crowded out. */
+@media (max-width: 640px) {
+  .event-figure {
+    max-height: 48vh;
+    opacity: 0.85;
+  }
+
+  .event-figure-wrapper.event-figure-right {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-figure {
+    transition: none;
+  }
+  .event-figure-wrapper {
+    --ev-parallax-x: 0px;
+    --ev-parallax-y: 0px;
+  }
+}

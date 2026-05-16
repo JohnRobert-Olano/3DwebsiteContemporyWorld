@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Lenis from 'lenis';
 import MapboxEarth from './components/MapboxEarth';
 import Content from './components/Content';
+import LandmarkEventOverlay from './components/LandmarkEventOverlay';
 import LoadingScreen from './components/LoadingScreen';
 import IntroSequence from './components/IntroSequence';
+import ScrollProgress from './components/ScrollProgress';
 
 function App() {
   const [isResetting, setIsResetting] = useState(false);
@@ -25,6 +27,7 @@ function App() {
       infinite: false,
     });
     lenisRef.current = lenis;
+    window.codexLenis = lenis;
     // Hold scroll while the intro plays so the user can't bail out mid-reveal
     lenis.stop();
 
@@ -36,6 +39,9 @@ function App() {
 
     return () => {
       lenis.destroy();
+      if (window.codexLenis === lenis) {
+        delete window.codexLenis;
+      }
     };
   }, []);
 
@@ -118,13 +124,20 @@ function App() {
         </div>
       </nav>
 
+      {/* Scroll progress bar (top sliver) */}
+      <ScrollProgress />
+
       {/* Immersive 3D Earth Layer (Fixed Background) */}
       <Suspense fallback={<LoadingScreen />}>
         <MapboxEarth />
       </Suspense>
 
+      {/* Cinematic foreground PNG overlays — sits between the map (z-0) and
+          the Content layer (z-10) so the destination card and nav stay on top. */}
+      <LandmarkEventOverlay />
+
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}
-      <Content />
+      <Content lenisRef={lenisRef} />
     </main>
   );
 }
