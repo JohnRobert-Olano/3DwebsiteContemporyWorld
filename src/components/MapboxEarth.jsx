@@ -28,7 +28,7 @@ const ROME_SLIDE = {
 
 const ROME = [12.4964, 41.9028];
 const COLOSSEUM = {
-  center: [12.4922, 41.8902],
+  center: [12.49222, 41.89091],
 };
 const EARTH_STYLE_URL = 'mapbox://styles/markjohn17/cmoyf4n2b003p01rfc3r655m4';
 const CITY_MODEL_STYLE_URL = 'mapbox://styles/markjohn17/cmoyg3ev9000r01suak0y71v7';
@@ -201,51 +201,54 @@ const ROME_KEYFRAMES = {
   },
   city: {
     mid: { center: ROME, zoom: 5.5, pitch: 38, bearing: -16 },
-    end: { center: COLOSSEUM.center, zoom: 16.6, pitch: 76, bearing: -32 },
+    end: { center: COLOSSEUM.center, zoom: 17.6, pitch: 70, bearing: -15.2 },
   },
 };
 
 // Per-destination camera targets for automatic, non-scrubbed flights.
 const DESTINATION_FLIGHT = {
-  cityEnd: { zoom: 16.6, pitch: 76, bearing: -32 },
+  cityEnd: { zoom: 17.6, pitch: 70, bearing: -15.2 },
   islandBirdseye: { zoom: 14.2, pitch: 0, bearing: 0 },
   mobileIslandBirdseye: { zoom: 13.2, pitch: 0, bearing: 0 },
   mobileSnap: { zoom: 6.2, pitch: 0, bearing: 0 },
 };
 
 const DESTINATION_VIEW_OVERRIDES = {
-  // Camera east, looking west across St. Peter's Square toward the basilica facade + dome.
-  // Lower pitch silhouettes the dome against the sky.
-  'saint-peters-basilica': { zoom: 16.5, pitch: 65, bearing: -90 },
+  // Colosseum — tight aerial angle slightly north-of-west, revealing the interior
+  // arena floor and the south wall's layered arches.
+  'colosseum': { zoom: 17.6, pitch: 70, bearing: -15.2 },
+  // Tight view from the southeast, looking northwest across St. Peter's Square
+  // toward the basilica facade + dome at a steep pitch.
+  'saint-peters-basilica': { zoom: 17.5, pitch: 80.1, bearing: -51.6 },
   // Pin at real-world South Gate. Camera south of the gate at a steep pitch
   // so the gatehouse + barbican fill the frame, the wall extends east/west,
   // and the moat sits in the foreground — the iconic Yongning Gate view.
-  'xian-city-wall': { zoom: 16.4, pitch: 72, bearing: 0 },
+  'xian-city-wall': { zoom: 17.4, pitch: 73.5, bearing: 0 },
   // Front view of the south facade — the ceremonial main entrance via the
   // Puerta del Príncipe across Plaza de la Armería.
-  'royal-palace-madrid': { zoom: 17.0, pitch: 70, bearing: 0 },
+  'royal-palace-madrid': { zoom: 18.0, pitch: 73.5, bearing: -28.7 },
   // Head-on view of the Torbau gatehouse archway. Camera SE looking NW.
-  'neuschwanstein-castle': { zoom: 17.3, pitch: 72, bearing: -45 },
+  'neuschwanstein-castle': { zoom: 18.3, pitch: 79.7, bearing: -84.3 },
   // Front view of the east facade (Mall / Victoria Memorial).
-  'buckingham-palace': { zoom: 17.0, pitch: 72, bearing: -90 },
+  'buckingham-palace': { zoom: 18.0, pitch: 73.5, bearing: -97.2 },
   // Head-on front view of Elizabeth Tower's north face, Palace of
   // Westminster as backdrop.
-  'big-ben': { zoom: 17.4, pitch: 66, bearing: 180 },
+  'big-ben': { zoom: 17.4, pitch: 76.5, bearing: -146.4 },
   // Statue faces SE at ~116° azimuth — camera SE, looking NW at her face.
-  'statue-of-liberty': { zoom: 17.4, pitch: 62, bearing: -64 },
+  'statue-of-liberty': { zoom: 17.4, pitch: 73.5, bearing: -33.6 },
   // Front view of the North Portico (Pennsylvania Avenue / official entry).
-  'white-house': { zoom: 17.4, pitch: 68, bearing: 180 },
+  'white-house': { zoom: 17.4, pitch: 68.5, bearing: -179.9 },
   // Pulled back so One WTC tower fits in frame with the surrounding Lower
   // Manhattan skyline instead of clipping the spire.
-  'world-trade-center-nyc': { zoom: 15.8, pitch: 65, bearing: 180 },
-  // 3D angled view of the island (no longer a flat satellite top-down).
-  // Pitch 60 + city-model profile renders the fallback island extrusion.
-  'san-salvador-island': { zoom: 14.5, pitch: 60, bearing: 0 },
+  'world-trade-center-nyc': { zoom: 15.8, pitch: 61.3, bearing: 45.9 },
+  // San Salvador Island, Bahamas — pull back to zoom 11 so the full
+  // 19 km island reads as a landmass. Pitch 55 gives a cinematic tilt.
+  'san-salvador-island': { zoom: 12.0, pitch: 54.5, bearing: -31.0 },
   // Cagusu-an Church and Plaza, Homonhon Island, Guiuan, Eastern Samar.
   // Cinematic close-up: camera tilted heavily east so the offshore 3D ship
   // (Three.js custom layer) reads against the open Philippine Sea while the
   // chapel + plaza coastline anchors the lower foreground.
-  'magellan-landing-site': { zoom: 16.2, pitch: 65, bearing: 90 },
+  'magellan-landing-site': { zoom: 18.69, pitch: 85.0, bearing: 34.4 },
 };
 
 const DESTINATION_FLIGHT_DURATION = 2200;
@@ -348,11 +351,13 @@ function buildXianWallFeatures() {
 }
 
 function buildSanSalvadorFeatures() {
-  // San Salvador Island, Masinloc, Zambales. This top-down fallback is kept
-  // low and wide so the bird's-eye map view reads as the whole island.
-  const center = [119.9114, 15.5087];
-  const halfW = 0.0058;  // ~620m east-west half
-  const halfH = 0.0034;  // ~375m north-south half
+  // San Salvador Island, Bahamas — Columbus's first New World landfall (1492).
+  // The island is elongated N-S (~19 km × 8 km); shape is scaled to read at
+  // the destination zoom (14.5) as a convincing island mass with the
+  // Dixon Hill Lighthouse marker at the north end.
+  const center = [-74.49661, 24.02154];
+  const halfW = 0.042;  // ~4.6 km east-west half
+  const halfH = 0.085;  // ~9.4 km north-south half
   const islandPoints = 32;
   const islandRing = [];
   for (let i = 0; i <= islandPoints; i += 1) {
@@ -363,14 +368,15 @@ function buildSanSalvadorFeatures() {
     ]);
   }
 
-  // Slender lighthouse marker (~6m square) rising 26m above the island.
+  // Dixon Hill Lighthouse — slender marker (~6 m square) at the north tip.
+  const lhCenter = [center[0] - 0.008, center[1] + 0.074];
   const lh = 0.000028;
   const lighthouseRing = [
-    [center[0] - lh, center[1] - lh],
-    [center[0] + lh, center[1] - lh],
-    [center[0] + lh, center[1] + lh],
-    [center[0] - lh, center[1] + lh],
-    [center[0] - lh, center[1] - lh],
+    [lhCenter[0] - lh, lhCenter[1] - lh],
+    [lhCenter[0] + lh, lhCenter[1] - lh],
+    [lhCenter[0] + lh, lhCenter[1] + lh],
+    [lhCenter[0] - lh, lhCenter[1] + lh],
+    [lhCenter[0] - lh, lhCenter[1] - lh],
   ];
 
   return [
@@ -398,11 +404,10 @@ function buildSanSalvadorFeatures() {
 }
 
 function buildMagellanLandingFeatures() {
-  // Cagusu-an Church and Plaza, Homonhon Island, Guiuan, Eastern Samar.
-  // Kept deliberately low and small — the offshore 3D Three.js ship is the
-  // hero element, so this fallback just gives the chapel + plaza a faint
-  // physical footprint at city-model zooms.
-  const center = [125.81721, 10.72224];
+  // Cagusu-an Church and Plaza, positioned on the island landmass visible
+  // at zoom 16.2 bearing 90. Nudged west/inland from the original coords
+  // so the shapes sit clearly on terra firma rather than in the shallows.
+  const center = [125.8148, 10.7232];
   const halfW = 0.00012; // ~13m east-west half (small chapel footprint)
   const halfH = 0.00010; // ~11m north-south half
 
@@ -507,18 +512,13 @@ const MAGELLAN_SHIP_LAYER_ID = 'codex-magellan-ship-3d';
 // ╚════════════════════════════════════════════════════════════════════╝
 const MAGELLAN_SHIP_CONFIG = {
   visibleDestinationId: 'magellan-landing-site',
-  // Anchor = the destination pin (Cagusu-an Church & Plaza).
-  anchorLngLat: [125.81721, 10.72224],
-  // Push the ship offshore so it doesn't float on top of the chapel.
-  // Positive lng → east (out into the Philippine Sea).
-  // At ~10.7°N, 0.0024° lng ≈ 265 m and 0.0006° lat ≈ 66 m.
-  offshoreOffset: [0.0024, 0.0006],
-  altitude: 0,            // meters above sea level (negative = sit deeper)
-  scale: 1.6,             // multiplier on the meter-unit scale (1.0 = real-meter sized)
-  // Yaw in degrees applied around the world-up axis (positive = CCW).
-  // Default rotates the bow toward the northwest so the broadside faces
-  // the camera approaching from the east at bearing 90.
-  rotation: [0, 0, 35],
+  // Anchor set to exact pinned position.
+  anchorLngLat: [125.81842, 10.72287],
+  offshoreOffset: [0.0000, 0.0000],
+  altitude: -6.50,            // meters above sea level (negative = sit deeper)
+  scale: 4.5,             // multiplier on the meter-unit scale (1.0 = real-meter sized)
+  // 0° aligns the ship flat parallel to the coastline.
+  rotation: [0, 0, 0],
 };
 
 const SHIP_WOOD_DARK = 0x553720;
@@ -716,11 +716,11 @@ function buildMagellanShip() {
   const metalMat = makeStandard(SHIP_METAL, 0.6, { metalness: 0.5 });
 
   // ── Hull ───────────────────────────────────────────────────────────
-  // Modeled in meters: 28 m overall length, ~7.6 m beam, ~3.6 m depth.
+  // Modeled in meters: 28 m overall length, ~10.0 m beam, ~5.6 m depth.
   const hullGeo = createHullGeometry({
     length: 28,
-    beam: 3.8,
-    depth: 3.6,
+    beam: 5.0,
+    depth: 5.6,
     ribs: 28,
     ringPoints: 18,
   });
@@ -1203,10 +1203,30 @@ function setRouteLayersOpacity(map, alpha) {
   }
 }
 
+function startTrackedFlight(map, options) {
+  // Tagged flight so a moveend from a CANCELED prior flight cannot
+  // accidentally clear the flag while a newer flight is still in motion.
+  const token = Symbol('codex-flight');
+  map.codexDestinationFlightToken = token;
+  window.codexDestinationFlying = true;
+
+  const onMoveEnd = () => {
+    map.off('moveend', onMoveEnd);
+    if (map.codexDestinationFlightToken === token) {
+      window.codexDestinationFlying = false;
+    }
+  };
+  map.on('moveend', onMoveEnd);
+  map.flyTo(options);
+}
+
 function applyDestinationTourState(map, tourState) {
   if (map.codexStyleSwitching) return;
   // Yield to the user while they are actively dragging / rotating the map.
   if (map.codexUserInteracting) return;
+  // Don't start a new flight while another is still in motion — overlapping
+  // flyTo calls cancel each other mid-arc and read as a visible double-jump.
+  if (window.codexDestinationFlying) return;
 
   const destination = destinations[tourState.index];
   if (!destination) return;
@@ -1219,7 +1239,7 @@ function applyDestinationTourState(map, tourState) {
   const destinationCenter = destinationToLngLat(destination);
   const marker = createDestinationMarker(map);
   const flightProfile = getDestinationFlightProfile(destination, isNarrow);
-  const { profile, styleUrl, styleConfig, camera, curve } = flightProfile;
+  const { profile, styleUrl, styleConfig, camera } = flightProfile;
   const duration = reducedMotion
     ? 0
     : isNarrow
@@ -1281,12 +1301,30 @@ function applyDestinationTourState(map, tourState) {
     });
   }
 
-  map.flyTo({
+  // Landmark-to-landmark: single smooth flyTo with a low curve so the
+  // motion reads as a continuous "fly + zoom-in" rather than an arc.
+  // Curve 1.05 ≈ near-straight path; speed-friendly cubic ease-out lands
+  // on the new framing cleanly without overshoot.
+  if (!comingFromIdle) {
+    startTrackedFlight(map, {
+      center: destinationCenter,
+      ...camera,
+      padding,
+      duration,
+      curve: 1.05,
+      speed: 1.4,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+      essential: true,
+    });
+    return;
+  }
+
+  startTrackedFlight(map, {
     center: destinationCenter,
     ...camera,
     padding,
-    duration: comingFromIdle ? 900 : duration,
-    curve: comingFromIdle ? 1.1 : curve,
+    duration: 900,
+    curve: 1.1,
     essential: true,
   });
 
@@ -1343,9 +1381,9 @@ function applyRomeReducedMotionState(map, progress) {
     }
     map.jumpTo({
       center: COLOSSEUM.center,
-      zoom: 17.25,
-      pitch: 56,
-      bearing: -32,
+      zoom: 17.6,
+      pitch: 70,
+      bearing: -15.2,
     });
   } else {
     if (map.codexSceneProfile !== 'earth') {
@@ -1782,8 +1820,8 @@ export default function MapboxEarth() {
       maxPitch: 85,
       // Mouse interactivity: drag to pan, right-click drag to rotate, double-click
       // to zoom in, pinch to zoom/rotate on touch screens. Scroll wheel zoom stays
-      // OFF so the page can still scroll while the cursor is over the globe.
-      scrollZoom: false,
+      // scrollZoom is enabled so the user can zoom out and in with the cursor wheel.
+      scrollZoom: true,
       boxZoom: false,
       dragRotate: true,
       dragPan: true,
@@ -1880,6 +1918,8 @@ export default function MapboxEarth() {
       window.romeScrollProgress = 0;
       window.destinationTourActive = false;
       window.destinationTourState = { index: 0, progress: 0 };
+      window.codexDestinationFlying = false;
+      m.codexDestinationFlightToken = null;
       m.codexDestinationActiveIndex = null;
       hideDestinationOverlays(m);
       m.codexRouteAnimating = true;
