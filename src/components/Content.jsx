@@ -170,63 +170,50 @@ export default function Content({ lenisRef }) {
         if (!panel) return;
 
         const side = cardSide(i);
-        gsap.set(card, {
-          opacity: 0,
-          x: side === 'right' ? 100 : -100,
-        });
+        const staggerEls = card.querySelectorAll('.stagger-item');
 
-        const tl = gsap.timeline({
-          scrollTrigger: {
-            trigger: panel,
-            start: 'top top',
-            end: '+=150%',
-            scrub: 1,
-            pin: true,
-            onEnter: () => {
-              setActiveSection(i);
-              window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
-            },
-            onEnterBack: () => {
-              setActiveSection(i);
-              window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
-            },
-            onLeave: () => {
-              window.globeTargetDirection = 0;
-            },
-            onLeaveBack: () => {
-              window.globeTargetDirection = 0;
-            },
-          },
-        });
+        gsap.set(card, { opacity: 0, x: side === 'right' ? 100 : -100 });
+        gsap.set(staggerEls, { opacity: 0, y: 30 });
 
+        const tl = gsap.timeline({ paused: true });
         tl.to(card, {
           opacity: 1,
           x: 0,
-          duration: 1,
+          duration: 0.7,
           ease: 'power2.out',
         });
-
-        const staggerEls = card.querySelectorAll('.stagger-item');
-        tl.fromTo(
+        tl.to(
           staggerEls,
-          { opacity: 0, y: 30 },
           {
             opacity: 1,
             y: 0,
-            duration: 1.5,
+            duration: 0.55,
             ease: 'power2.out',
-            stagger: 0.5,
+            stagger: 0.08,
           },
-          '<+=0.5',
+          '<+=0.15',
         );
 
-        tl.to({}, { duration: 1.5 });
-
-        tl.to(card, {
-          opacity: 0,
-          x: side === 'right' ? 50 : -50,
-          duration: 1,
-          ease: 'power2.in',
+        ScrollTrigger.create({
+          trigger: panel,
+          start: 'top center',
+          end: 'bottom center',
+          onEnter: () => {
+            setActiveSection(i);
+            window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
+            tl.play(0);
+          },
+          onEnterBack: () => {
+            setActiveSection(i);
+            window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
+            tl.play(0);
+          },
+          onLeave: () => {
+            window.globeTargetDirection = 0;
+          },
+          onLeaveBack: () => {
+            window.globeTargetDirection = 0;
+          },
         });
       });
 
@@ -285,12 +272,13 @@ export default function Content({ lenisRef }) {
           });
         };
 
-        // Keep the panel pinned while the independent flight finishes, then
-        // release normally on the next scroll.
+        // Short pin so each landmark behaves as a discrete page.
+        // The wheel/touch handler below auto-snaps to the next landmark
+        // after a single scroll input.
         ScrollTrigger.create({
           trigger: panel,
           start: 'top top',
-          end: '+=85%',
+          end: '+=10%',
           pin: true,
           anticipatePin: 1,
           onEnter: revealCard,
@@ -299,8 +287,6 @@ export default function Content({ lenisRef }) {
           onLeaveBack: () => {
             hideCard(40);
             if (i === 0) {
-              // Scrolling back past the first destination (Colosseum) —
-              // no previous journey stop; clear the active nav highlight.
               window.destinationTourActive = false;
               setActiveJourneyIndex(-1);
             } else {
@@ -316,6 +302,170 @@ export default function Content({ lenisRef }) {
       ctx.revert();
       window.romeModeActive = false;
       window.destinationTourActive = false;
+    };
+  }, []);
+
+  /* ── 1-scroll auto-advance between all content panels ───── */
+  useEffect(() => {
+    const reducedMotion =
+      typeof window !== 'undefined'
+      && window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) return undefined;
+
+    let isSnapping = false;
+    let cooldownTimer = null;
+    let touchStartY = null;
+    let lastWheelTime = 0;
+
+    const releaseLock = (delay = 220) => {
+      if (cooldownTimer) clearTimeout(cooldownTimer);
+      cooldownTimer = setTimeout(() => {
+        isSnapping = false;
+        const lenis = window.codexLenis;
+        if (lenis?.start) lenis.start();
+      }, delay);
+    };
+
+    const findCurrentPanelIdx = (panels) => {
+      // Use viewport-relative geometry — element.offsetTop is broken for
+      // GSAP-pinned destinations (their offsetParent becomes the pin-spacer,
+      // so offsetTop reports 0 and the loop runs off the end of the list).
+      const tolerance = 8;
+      let idx = -1;
+      for (let i = 0; i < panels.length; i += 1) {
+        const rectTop = panels[i].getBoundingClientRect().top;
+        if (rectTop <= tolerance) {
+          idx = i;
+        } else {
+          break;
+        }
+      }
+      return idx;
+    };
+
+    const snapToPanel = (direction) => {
+      if (isSnapping) return true;
+
+      const lenis = window.codexLenis;
+      // While Lenis is stopped (intro playing, /Home reset in progress),
+      // lenis.scrollTo returns early without firing onComplete. Engaging
+      // the snap here would lock isSnapping=true forever, freezing every
+      // subsequent wheel event after the intro.
+      if (lenis?.isStopped) return false;
+
+      const panels = Array.from(document.querySelectorAll('.panel-section'));
+      if (!panels.length) return false;
+
+      const currentIdx = findCurrentPanelIdx(panels);
+
+      // Above the first panel scrolling up — release to native scroll.
+      if (currentIdx === -1 && direction < 0) return false;
+
+      const targetIdx = currentIdx === -1 ? 0 : currentIdx + direction;
+
+      // Past the last panel — release to native scroll for the footer.
+      if (targetIdx < 0 || targetIdx >= panels.length) return false;
+
+      const target = panels[targetIdx];
+      if (!target) return false;
+
+      isSnapping = true;
+
+      // Defensive fallback: even with the isStopped check above, if Lenis
+      // ever fails to fire onComplete (e.g. scroll target equals current
+      // position), unstick the lock after the snap duration + buffer.
+      const fallbackTimer = setTimeout(() => {
+        isSnapping = false;
+      }, 3000);
+
+      if (lenis?.scrollTo) {
+        lenis.scrollTo(target, {
+          duration: 1.4,
+          easing: (t) => 1 - Math.pow(1 - t, 3),
+          lock: true,
+          onComplete: () => {
+            clearTimeout(fallbackTimer);
+            releaseLock(220);
+          },
+        });
+      } else {
+        clearTimeout(fallbackTimer);
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        releaseLock(1500);
+      }
+
+      return true;
+    };
+
+    // CAPTURE PHASE — must fire BEFORE Lenis's bubble-phase listener,
+    // otherwise Lenis's preventDefault locks the wheel event out of reach.
+    const handleWheel = (e) => {
+      // Block scroll while a snap is mid-flight OR while the map camera
+      // is still flying — overlapping inputs cause flyTo cancellations
+      // that read as a double-jump transition.
+      if (isSnapping || window.codexDestinationFlying) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      const now = performance.now();
+      // One trackpad gesture fires many wheel events; treat the burst as one.
+      if (now - lastWheelTime < 120) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      if (Math.abs(e.deltaY) < 4) return;
+
+      lastWheelTime = now;
+      const direction = e.deltaY > 0 ? 1 : -1;
+      const consumed = snapToPanel(direction);
+
+      if (consumed) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    const handleTouchStart = (e) => {
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e) => {
+      if (touchStartY == null) return;
+      if (isSnapping || window.codexDestinationFlying) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (touchStartY == null) return;
+
+      const touchEndY = e.changedTouches[0].clientY;
+      const delta = touchStartY - touchEndY;
+      touchStartY = null;
+
+      if (Math.abs(delta) < 40) return;
+
+      const direction = delta > 0 ? 1 : -1;
+      snapToPanel(direction);
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true, capture: true });
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel, { capture: true });
+      window.removeEventListener('touchstart', handleTouchStart, { capture: true });
+      window.removeEventListener('touchmove', handleTouchMove, { capture: true });
+      window.removeEventListener('touchend', handleTouchEnd, { capture: true });
+      if (cooldownTimer) clearTimeout(cooldownTimer);
     };
   }, []);
 
