@@ -14,6 +14,12 @@
       "mcp__figma__generate_figma_design",
       "PowerShell(Start-Process \"http://localhost:5173/#figmacapture=aa5fe17e-e3af-4449-9f73-e0aa22fcb438&figmaendpoint=https%3A%2F%2Fmcp.figma.com%2Fmcp%2Fcapture%2Faa5fe17e-e3af-4449-9f73-e0aa22fcb438%2Fsubmit&figmadelay=3000\")",
       "PowerShell(Start-Process \"https://www.figma.com/design/RtAy1QK4HrgGX5wXOWz0CC\")"
+      "Bash(npx eslint *)",
+      "WebSearch",
+      "Bash(npm --version)",
+      "Bash(uipro --version)",
+      "Bash(uipro --help)",
+      "Bash(uipro init *)"
     ]
   }
 }

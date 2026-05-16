@@ -49,14 +49,14 @@ export const destinations = [
   },
   {
     id: 'magellan-landing-site',
-    name: 'Magellan Landing Site',
-    location: 'Barangay Masao, Butuan City, Philippines',
-    built: 'Historical anchorage',
-    lat: 8.999434,
-    lon: 125.483603,
+    name: 'Cagusu-an Church and Plaza',
+    location: 'Cagusu-an, Guiuan, Eastern Samar, Philippines',
+    built: 'Historic coastal settlement',
+    lat: 10.72224,
+    lon: 125.81721,
     about:
-      'Coastal memorial in Barangay Masao associated with local accounts of Ferdinand Magellan\'s 1521 anchorage and landing in Butuan.',
-    significance: 'Early contact-era maritime history in Mindanao',
+      'Cagusu-an Church and Plaza area on Homonhon Island, Guiuan, Eastern Samar, near the historical Magellan landing narrative.',
+    significance: 'Magellan-era maritime landing history in Eastern Samar',
   },
   {
     id: 'royal-palace-madrid',
