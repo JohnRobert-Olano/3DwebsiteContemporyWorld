@@ -131,13 +131,6 @@ const setDestinationTourState = (index) => {
   };
 };
 
-const dispatchLandmarkActive = (id) => {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(
-    new CustomEvent('landmark:active', { detail: { id } }),
-  );
-};
-
 const buildLabelFor = (destination) => {
   if (destination.id === 'world-trade-center-nyc') return 'Rebuilt';
   if (destination.id === 'magellan-landing-site') return 'Type';
@@ -243,7 +236,6 @@ export default function Content({ lenisRef }) {
         const panel = card.closest('.destination-section');
         if (!panel) return;
         const revealEls = card.querySelectorAll('.destination-reveal');
-        const destinationId = destinations[i]?.id;
 
         gsap.set(card, {
           opacity: 0,
@@ -260,7 +252,6 @@ export default function Content({ lenisRef }) {
           setActiveSection(sections.length + i);
           setActiveJourneyIndex(i);
           setDestinationTourState(i);
-          dispatchLandmarkActive(destinationId);
 
           gsap.killTweensOf([card, ...revealEls]);
           gsap.set(revealEls, { opacity: 0, y: 18 });
@@ -304,10 +295,7 @@ export default function Content({ lenisRef }) {
           anticipatePin: 1,
           onEnter: revealCard,
           onEnterBack: revealCard,
-          onLeave: () => {
-            hideCard(-24);
-            dispatchLandmarkActive(null);
-          },
+          onLeave: () => hideCard(-24),
           onLeaveBack: () => {
             hideCard(40);
             if (i === 0) {
@@ -315,11 +303,9 @@ export default function Content({ lenisRef }) {
               // no previous journey stop; clear the active nav highlight.
               window.destinationTourActive = false;
               setActiveJourneyIndex(-1);
-              dispatchLandmarkActive(null);
             } else {
               setDestinationTourState(i - 1);
               setActiveJourneyIndex(i - 1);
-              dispatchLandmarkActive(destinations[i - 1]?.id ?? null);
             }
           },
         });
