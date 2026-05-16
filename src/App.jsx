@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Lenis from 'lenis';
 import MapboxEarth from './components/MapboxEarth';
 import Content from './components/Content';
+import LandmarkEventOverlay from './components/LandmarkEventOverlay';
 import LoadingScreen from './components/LoadingScreen';
 import IntroSequence from './components/IntroSequence';
 import ScrollProgress from './components/ScrollProgress';
@@ -130,6 +131,10 @@ function App() {
       <Suspense fallback={<LoadingScreen />}>
         <MapboxEarth />
       </Suspense>
+
+      {/* Cinematic foreground PNG overlays — sits between the map (z-0) and
+          the Content layer (z-10) so the destination card and nav stay on top. */}
+      <LandmarkEventOverlay />
 
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}
       <Content lenisRef={lenisRef} />

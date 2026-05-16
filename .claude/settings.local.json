@@ -3,7 +3,13 @@
     "allow": [
       "Bash(npm run *)",
       "Bash([ -d \"node_modules/$dep\" ])",
-      "Bash(tasklist //FI \"IMAGENAME eq node.exe\")"
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\")",
+      "Bash(npx eslint *)",
+      "WebSearch",
+      "Bash(npm --version)",
+      "Bash(uipro --version)",
+      "Bash(uipro --help)",
+      "Bash(uipro init *)"
     ]
   }
 }

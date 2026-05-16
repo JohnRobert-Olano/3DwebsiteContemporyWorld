@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import * as THREE from 'three';
 import SlidePanel from './SlidePanel';
+import MapHud from './MapHud';
 import { destinations } from '../lib/data/destinations';
 
 const ROME_SLIDE = {
@@ -239,6 +241,11 @@ const DESTINATION_VIEW_OVERRIDES = {
   // 3D angled view of the island (no longer a flat satellite top-down).
   // Pitch 60 + city-model profile renders the fallback island extrusion.
   'san-salvador-island': { zoom: 14.5, pitch: 60, bearing: 0 },
+  // Cagusu-an Church and Plaza, Homonhon Island, Guiuan, Eastern Samar.
+  // Cinematic close-up: camera tilted heavily east so the offshore 3D ship
+  // (Three.js custom layer) reads against the open Philippine Sea while the
+  // chapel + plaza coastline anchors the lower foreground.
+  'magellan-landing-site': { zoom: 16.2, pitch: 65, bearing: 90 },
 };
 
 const DESTINATION_FLIGHT_DURATION = 2200;
@@ -391,13 +398,15 @@ function buildSanSalvadorFeatures() {
 }
 
 function buildMagellanLandingFeatures() {
-  // Magellan Landing Site / Magellan's Anchorage in Barangay Masao, Butuan.
-  // Modeled as a low coastal memorial platform plus a compact vertical marker.
-  const center = [125.483603, 8.999434];
-  const halfW = 0.00016; // ~17.5m east-west half
-  const halfH = 0.00007; // ~7.7m north-south half
+  // Cagusu-an Church and Plaza, Homonhon Island, Guiuan, Eastern Samar.
+  // Kept deliberately low and small — the offshore 3D Three.js ship is the
+  // hero element, so this fallback just gives the chapel + plaza a faint
+  // physical footprint at city-model zooms.
+  const center = [125.81721, 10.72224];
+  const halfW = 0.00012; // ~13m east-west half (small chapel footprint)
+  const halfH = 0.00010; // ~11m north-south half
 
-  const platform = [
+  const chapel = [
     [center[0] - halfW, center[1] - halfH],
     [center[0] + halfW, center[1] - halfH],
     [center[0] + halfW, center[1] + halfH],
@@ -405,35 +414,36 @@ function buildMagellanLandingFeatures() {
     [center[0] - halfW, center[1] - halfH],
   ];
 
-  const markerHalf = 0.000028; // ~3m half-side marker
-  const marker = [
-    [center[0] - markerHalf, center[1] - markerHalf],
-    [center[0] + markerHalf, center[1] - markerHalf],
-    [center[0] + markerHalf, center[1] + markerHalf],
-    [center[0] - markerHalf, center[1] + markerHalf],
-    [center[0] - markerHalf, center[1] - markerHalf],
+  const plazaHalfW = 0.00030; // ~33m plaza apron in front of the chapel
+  const plazaHalfH = 0.00018;
+  const plaza = [
+    [center[0] - plazaHalfW, center[1] - plazaHalfH],
+    [center[0] + plazaHalfW, center[1] - plazaHalfH],
+    [center[0] + plazaHalfW, center[1] + plazaHalfH],
+    [center[0] - plazaHalfW, center[1] + plazaHalfH],
+    [center[0] - plazaHalfW, center[1] - plazaHalfH],
   ];
 
   return [
     {
       type: 'Feature',
       properties: {
-        id: 'magellan-landing-platform',
-        height: 2,
+        id: 'cagusu-an-plaza',
+        height: 0.4,
         base: 0,
-        color: '#C8B27A',
+        color: '#D9C9A8',
       },
-      geometry: { type: 'Polygon', coordinates: [platform] },
+      geometry: { type: 'Polygon', coordinates: [plaza] },
     },
     {
       type: 'Feature',
       properties: {
-        id: 'magellan-landing-marker',
-        height: 18,
-        base: 2,
-        color: '#F4F0E6',
+        id: 'cagusu-an-chapel',
+        height: 6,
+        base: 0,
+        color: '#E8DCC1',
       },
-      geometry: { type: 'Polygon', coordinates: [marker] },
+      geometry: { type: 'Polygon', coordinates: [chapel] },
     },
   ];
 }
@@ -481,6 +491,548 @@ function ensureFallbackLandmarks(map) {
       },
     }));
   }
+}
+
+// ─── Magellan 3D ship (Three.js custom Mapbox layer) ──────────────────────
+// A Magellan-era square-rigged nao rendered as a Mapbox `type: 'custom'`
+// layer with `renderingMode: '3d'`. The layer reuses Mapbox's WebGL
+// context (no separate fullscreen canvas) and is positioned via
+// `MercatorCoordinate.fromLngLat`. Only renders when the active
+// destination matches `visibleDestinationId`.
+const MAGELLAN_SHIP_LAYER_ID = 'codex-magellan-ship-3d';
+
+// ╔════════════════════════════════════════════════════════════════════╗
+// ║  EDIT ME — Magellan ship placement                                 ║
+// ║  All values below are easy to tweak; nothing else needs to change. ║
+// ╚════════════════════════════════════════════════════════════════════╝
+const MAGELLAN_SHIP_CONFIG = {
+  visibleDestinationId: 'magellan-landing-site',
+  // Anchor = the destination pin (Cagusu-an Church & Plaza).
+  anchorLngLat: [125.81721, 10.72224],
+  // Push the ship offshore so it doesn't float on top of the chapel.
+  // Positive lng → east (out into the Philippine Sea).
+  // At ~10.7°N, 0.0024° lng ≈ 265 m and 0.0006° lat ≈ 66 m.
+  offshoreOffset: [0.0024, 0.0006],
+  altitude: 0,            // meters above sea level (negative = sit deeper)
+  scale: 1.6,             // multiplier on the meter-unit scale (1.0 = real-meter sized)
+  // Yaw in degrees applied around the world-up axis (positive = CCW).
+  // Default rotates the bow toward the northwest so the broadside faces
+  // the camera approaching from the east at bearing 90.
+  rotation: [0, 0, 35],
+};
+
+const SHIP_WOOD_DARK = 0x553720;
+const SHIP_WOOD_MID = 0x7a5230;
+const SHIP_WOOD_LIGHT = 0xa57440;
+const SHIP_SAIL_CLOTH = 0xf3e7c8;
+const SHIP_ROPE = 0x2a1c10;
+const SHIP_FLAG_RED = 0xc0392b;
+const SHIP_FLAG_GOLD = 0xd4a64a;
+const SHIP_METAL = 0x2b2622;
+
+function makeStandard(color, roughness = 0.85, opts = {}) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness,
+    metalness: opts.metalness ?? 0,
+    side: opts.side ?? THREE.FrontSide,
+    transparent: opts.transparent ?? false,
+    opacity: opts.opacity ?? 1,
+  });
+}
+
+// Parametric hull: ribs along X (keel), elliptical lower halves, with
+// width / depth profiles that taper to a sharp bow and a wider, raised
+// stern — the silhouette of a 16th-century nao.
+function createHullGeometry({ length, beam, depth, ribs, ringPoints }) {
+  const positions = [];
+  const indices = [];
+
+  for (let i = 0; i < ribs; i += 1) {
+    const t = i / (ribs - 1); // 0 = stern, 1 = bow
+    const x = -length / 2 + t * length;
+
+    // Beam (half-width). Max near 0.45 along the keel, narrow at bow.
+    const widthCurve = Math.sin(t * Math.PI) * (0.78 + 0.22 * (1 - t));
+    const halfBeam = beam * widthCurve;
+
+    // Keel depth — deepest in the middle, lifted at both ends.
+    const keelDepth = -depth * Math.sin(Math.min(1, t * 1.35)) *
+      Math.sin(Math.min(1, (1 - t) * 1.25));
+
+    // Top deck-edge height: forecastle bump at bow, sterncastle rise at stern.
+    const bowRise = t > 0.86 ? ((t - 0.86) / 0.14) * 0.9 : 0;
+    const sternRise = t < 0.18 ? ((0.18 - t) / 0.18) * 1.4 : 0;
+    const topY = bowRise + sternRise;
+
+    for (let j = 0; j < ringPoints; j += 1) {
+      const a = (j / (ringPoints - 1)) * Math.PI; // 0..PI
+      const z = -halfBeam * Math.cos(a);
+      const blend = Math.sin(a); // 0 at deck edges, 1 at keel
+      const y = topY * (1 - blend) + keelDepth * blend;
+      positions.push(x, y, z);
+    }
+  }
+
+  for (let i = 0; i < ribs - 1; i += 1) {
+    for (let j = 0; j < ringPoints - 1; j += 1) {
+      const a = i * ringPoints + j;
+      const b = a + 1;
+      const c = (i + 1) * ringPoints + j;
+      const d = c + 1;
+      indices.push(a, c, b);
+      indices.push(b, c, d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Curved sail plane — slightly billowed by displacing the middle row.
+function createSailGeometry(width, height, billow = 0.18) {
+  const geo = new THREE.PlaneGeometry(width, height, 6, 4);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const u = (x / width) + 0.5;
+    const v = (y / height) + 0.5;
+    // Billow strongest in the middle, taper toward the edges.
+    const bow = billow * Math.sin(u * Math.PI) * Math.sin(v * Math.PI);
+    pos.setZ(i, bow * width);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function buildSquareSail({ width, height, material, position }) {
+  const sail = new THREE.Mesh(createSailGeometry(width, height), material);
+  sail.position.set(position[0], position[1], position[2]);
+  // Sail bows forward (toward bow = +X), so face the curved side outward.
+  sail.rotation.y = 0;
+  return sail;
+}
+
+function buildMastAssembly({
+  rootY,
+  mastHeight,
+  mastRadius,
+  yardSpans, // array of { y, width, sailHeight }
+  woodMat,
+  sailMat,
+  flag,
+}) {
+  const group = new THREE.Group();
+
+  // Main mast pole
+  const mastGeo = new THREE.CylinderGeometry(mastRadius * 0.7, mastRadius, mastHeight, 12);
+  const mast = new THREE.Mesh(mastGeo, woodMat);
+  mast.position.y = rootY + mastHeight / 2;
+  group.add(mast);
+
+  // Top cap / crow's nest disk
+  const capGeo = new THREE.CylinderGeometry(mastRadius * 1.8, mastRadius * 1.2, 0.18, 12);
+  const cap = new THREE.Mesh(capGeo, woodMat);
+  cap.position.y = rootY + mastHeight - 0.5;
+  group.add(cap);
+
+  // Yards (cross beams) + sails
+  yardSpans.forEach((spec, i) => {
+    const yardGeo = new THREE.CylinderGeometry(0.08, 0.08, spec.width, 8);
+    const yard = new THREE.Mesh(yardGeo, woodMat);
+    yard.rotation.z = Math.PI / 2;
+    yard.position.set(0, spec.y, 0);
+    group.add(yard);
+
+    // Sail hangs below the yard by spec.sailHeight, centered on the mast.
+    const sail = buildSquareSail({
+      width: spec.width * 0.92,
+      height: spec.sailHeight,
+      material: sailMat,
+      position: [0, spec.y - spec.sailHeight / 2 - 0.04, 0.04],
+    });
+    group.add(sail);
+
+    // Reef line / rope across the bottom of each sail.
+    const reefGeo = new THREE.CylinderGeometry(0.025, 0.025, spec.width * 0.92, 6);
+    const reef = new THREE.Mesh(reefGeo, makeStandard(SHIP_ROPE, 1.0));
+    reef.rotation.z = Math.PI / 2;
+    reef.position.set(0, spec.y - spec.sailHeight - 0.05, 0.04);
+    group.add(reef);
+
+    // Lift lines from yard tip → mast top.
+    if (i === yardSpans.length - 1) {
+      const lineMat = makeStandard(SHIP_ROPE, 1.0);
+      [-1, 1].forEach((sign) => {
+        const len = mastHeight - (spec.y - rootY);
+        const lineGeo = new THREE.CylinderGeometry(0.02, 0.02, len * 1.05, 5);
+        const line = new THREE.Mesh(lineGeo, lineMat);
+        line.position.set(sign * spec.width * 0.46, spec.y + len * 0.45, 0);
+        line.rotation.z = sign * Math.atan2(spec.width * 0.46, len) * 0.95;
+        group.add(line);
+      });
+    }
+  });
+
+  // Flag at the masthead
+  if (flag) {
+    const flagGeo = new THREE.PlaneGeometry(flag.width, flag.height, 4, 2);
+    const fp = flagGeo.attributes.position;
+    for (let i = 0; i < fp.count; i += 1) {
+      const x = fp.getX(i);
+      const wave = Math.sin((x / flag.width) * Math.PI * 1.6) * 0.06;
+      fp.setZ(i, wave);
+    }
+    fp.needsUpdate = true;
+    flagGeo.computeVertexNormals();
+    const flagMat = makeStandard(flag.color, 0.85, { side: THREE.DoubleSide });
+    const flagMesh = new THREE.Mesh(flagGeo, flagMat);
+    flagMesh.position.set(flag.width / 2 + 0.05, rootY + mastHeight + 0.35, 0);
+    group.add(flagMesh);
+
+    // Flagpole continuation above the mast top
+    const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6);
+    const pole = new THREE.Mesh(poleGeo, woodMat);
+    pole.position.set(0, rootY + mastHeight + 0.45, 0);
+    group.add(pole);
+  }
+
+  return group;
+}
+
+function buildMagellanShip() {
+  const root = new THREE.Group();
+
+  const hullDark = makeStandard(SHIP_WOOD_DARK, 0.9);
+  const hullMid = makeStandard(SHIP_WOOD_MID, 0.85);
+  const hullLight = makeStandard(SHIP_WOOD_LIGHT, 0.8);
+  const sailMat = makeStandard(SHIP_SAIL_CLOTH, 0.95, { side: THREE.DoubleSide });
+  const ropeMat = makeStandard(SHIP_ROPE, 1.0);
+  const metalMat = makeStandard(SHIP_METAL, 0.6, { metalness: 0.5 });
+
+  // ── Hull ───────────────────────────────────────────────────────────
+  // Modeled in meters: 28 m overall length, ~7.6 m beam, ~3.6 m depth.
+  const hullGeo = createHullGeometry({
+    length: 28,
+    beam: 3.8,
+    depth: 3.6,
+    ribs: 28,
+    ringPoints: 18,
+  });
+  const hull = new THREE.Mesh(hullGeo, hullDark);
+  hull.position.y = 2.0; // float waterline halfway up the hull
+  root.add(hull);
+
+  // Hull wale — a lighter band along the deck line (port + starboard).
+  [-1, 1].forEach((sign) => {
+    const waleGeo = new THREE.BoxGeometry(26, 0.18, 0.22);
+    const wale = new THREE.Mesh(waleGeo, hullLight);
+    wale.position.set(0, 2.0, sign * 3.3);
+    root.add(wale);
+  });
+
+  // ── Deck planking ──────────────────────────────────────────────────
+  const deckGeo = new THREE.BoxGeometry(24, 0.12, 6.3);
+  const deck = new THREE.Mesh(deckGeo, hullMid);
+  deck.position.set(0.4, 2.05, 0);
+  root.add(deck);
+
+  // ── Sterncastle (raised aft structure, 2 stages) ──────────────────
+  const sternBaseGeo = new THREE.BoxGeometry(5.5, 2.2, 5.6);
+  const sternBase = new THREE.Mesh(sternBaseGeo, hullDark);
+  sternBase.position.set(-10.5, 3.2, 0);
+  root.add(sternBase);
+
+  const sternUpperGeo = new THREE.BoxGeometry(4.2, 1.4, 4.6);
+  const sternUpper = new THREE.Mesh(sternUpperGeo, hullMid);
+  sternUpper.position.set(-11.2, 5.0, 0);
+  root.add(sternUpper);
+
+  // Sterncastle railing
+  const sternRailGeo = new THREE.BoxGeometry(4.4, 0.14, 0.16);
+  const sternRailFore = new THREE.Mesh(sternRailGeo, hullLight);
+  sternRailFore.position.set(-11.2, 5.8, 2.4);
+  root.add(sternRailFore);
+  const sternRailAft = new THREE.Mesh(sternRailGeo, hullLight);
+  sternRailAft.position.set(-11.2, 5.8, -2.4);
+  root.add(sternRailAft);
+
+  // Stern windows (gallery) — three rectangles set into the back face.
+  for (let i = -1; i <= 1; i += 1) {
+    const winGeo = new THREE.BoxGeometry(0.06, 0.7, 0.5);
+    const win = new THREE.Mesh(winGeo, makeStandard(0x2a2a3a, 0.6, { metalness: 0.4 }));
+    win.position.set(-13.3, 3.4, i * 1.0);
+    root.add(win);
+  }
+
+  // ── Forecastle (raised bow structure) ──────────────────────────────
+  const foreGeo = new THREE.BoxGeometry(3.5, 1.7, 4.5);
+  const foreCastle = new THREE.Mesh(foreGeo, hullDark);
+  foreCastle.position.set(10.5, 2.95, 0);
+  root.add(foreCastle);
+
+  // Bowsprit (forward-leaning small mast)
+  const bowspritGeo = new THREE.CylinderGeometry(0.14, 0.18, 6.5, 10);
+  const bowsprit = new THREE.Mesh(bowspritGeo, hullDark);
+  bowsprit.position.set(14.0, 4.4, 0);
+  bowsprit.rotation.z = Math.PI / 2 + 0.25; // tilted upward toward bow
+  root.add(bowsprit);
+
+  // Tiny spritsail under the bowsprit
+  const spritSailGeo = new THREE.PlaneGeometry(2.6, 1.5, 4, 3);
+  const spritSail = new THREE.Mesh(spritSailGeo, sailMat);
+  spritSail.position.set(13.5, 3.5, 0);
+  spritSail.rotation.y = Math.PI / 2;
+  root.add(spritSail);
+
+  // ── Masts ─────────────────────────────────────────────────────────
+  // Foremast (forward), Mainmast (mid, tallest), Mizzenmast (aft, lateen).
+  const deckY = 2.1;
+
+  const foremast = buildMastAssembly({
+    rootY: deckY,
+    mastHeight: 14,
+    mastRadius: 0.34,
+    yardSpans: [
+      { y: deckY + 6.5, width: 7.5, sailHeight: 3.6 },
+      { y: deckY + 11.0, width: 5.6, sailHeight: 2.6 },
+    ],
+    woodMat: hullMid,
+    sailMat,
+    flag: { width: 1.2, height: 0.6, color: SHIP_FLAG_RED },
+  });
+  foremast.position.set(7.5, 0, 0);
+  root.add(foremast);
+
+  const mainmast = buildMastAssembly({
+    rootY: deckY,
+    mastHeight: 18,
+    mastRadius: 0.42,
+    yardSpans: [
+      { y: deckY + 7.5, width: 9.5, sailHeight: 4.2 },
+      { y: deckY + 13.0, width: 7.0, sailHeight: 3.2 },
+      { y: deckY + 17.2, width: 4.4, sailHeight: 1.8 },
+    ],
+    woodMat: hullMid,
+    sailMat,
+    flag: { width: 1.5, height: 0.8, color: SHIP_FLAG_GOLD },
+  });
+  mainmast.position.set(0, 0, 0);
+  root.add(mainmast);
+
+  // Mizzenmast — shorter, with a lateen (triangular) sail
+  const mizzenHeight = 11.5;
+  const mizzenGeo = new THREE.CylinderGeometry(0.22, 0.32, mizzenHeight, 10);
+  const mizzen = new THREE.Mesh(mizzenGeo, hullMid);
+  mizzen.position.set(-8.5, deckY + mizzenHeight / 2, 0);
+  root.add(mizzen);
+
+  // Lateen yard (long diagonal beam)
+  const lateenYardGeo = new THREE.CylinderGeometry(0.09, 0.09, 9.0, 8);
+  const lateenYard = new THREE.Mesh(lateenYardGeo, hullMid);
+  lateenYard.position.set(-8.5, deckY + 8.0, 0);
+  lateenYard.rotation.z = -Math.PI / 5;
+  root.add(lateenYard);
+
+  // Lateen triangular sail
+  const lateenShape = new THREE.Shape();
+  lateenShape.moveTo(-3.8, -3.6);
+  lateenShape.lineTo(4.2, 1.2);
+  lateenShape.lineTo(-3.6, 1.6);
+  lateenShape.closePath();
+  const lateenGeo = new THREE.ShapeGeometry(lateenShape);
+  const lateenSail = new THREE.Mesh(lateenGeo, sailMat);
+  lateenSail.position.set(-8.5, deckY + 7.5, 0.05);
+  lateenSail.rotation.z = -Math.PI / 5;
+  root.add(lateenSail);
+
+  // Flag at mizzentop
+  const mizzenFlagGeo = new THREE.PlaneGeometry(0.9, 0.5, 4, 2);
+  const mizzenFlag = new THREE.Mesh(mizzenFlagGeo, makeStandard(SHIP_FLAG_RED, 0.85, { side: THREE.DoubleSide }));
+  mizzenFlag.position.set(-8.5 + 0.5, deckY + mizzenHeight + 0.3, 0);
+  root.add(mizzenFlag);
+
+  // ── Rigging — fore-aft stays and shrouds ──────────────────────────
+  const stays = [
+    // Forestay: bowsprit tip → foremast top
+    { from: [14.0, 4.4, 0], to: [7.5, deckY + 14, 0] },
+    // Foremast → mainmast
+    { from: [7.5, deckY + 14, 0], to: [0, deckY + 18, 0] },
+    // Mainmast → mizzenmast
+    { from: [0, deckY + 18, 0], to: [-8.5, deckY + mizzenHeight, 0] },
+    // Mizzenmast → sterncastle aft
+    { from: [-8.5, deckY + mizzenHeight, 0], to: [-12.5, 5.6, 0] },
+  ];
+  stays.forEach(({ from, to }) => {
+    const v1 = new THREE.Vector3(...from);
+    const v2 = new THREE.Vector3(...to);
+    const len = v1.distanceTo(v2);
+    const geo = new THREE.CylinderGeometry(0.04, 0.04, len, 6);
+    const line = new THREE.Mesh(geo, ropeMat);
+    line.position.copy(v1).lerp(v2, 0.5);
+    // Orient the cylinder (default along Y) toward v2
+    const dir = v2.clone().sub(v1).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const quat = new THREE.Quaternion().setFromUnitVectors(up, dir);
+    line.quaternion.copy(quat);
+    root.add(line);
+  });
+
+  // Shrouds — slanted lines from masthead to deck edge port + starboard.
+  const shroudSpec = [
+    { x: 7.5, top: deckY + 13, z: 2.6 },
+    { x: 7.5, top: deckY + 13, z: -2.6 },
+    { x: 0, top: deckY + 17, z: 2.9 },
+    { x: 0, top: deckY + 17, z: -2.9 },
+    { x: -8.5, top: deckY + mizzenHeight - 1, z: 2.4 },
+    { x: -8.5, top: deckY + mizzenHeight - 1, z: -2.4 },
+  ];
+  shroudSpec.forEach(({ x, top, z }) => {
+    const v1 = new THREE.Vector3(x, top, 0);
+    const v2 = new THREE.Vector3(x, deckY + 0.2, z);
+    const len = v1.distanceTo(v2);
+    const geo = new THREE.CylinderGeometry(0.035, 0.035, len, 6);
+    const line = new THREE.Mesh(geo, ropeMat);
+    line.position.copy(v1).lerp(v2, 0.5);
+    const dir = v2.clone().sub(v1).normalize();
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    line.quaternion.copy(quat);
+    root.add(line);
+  });
+
+  // ── Anchor + bow ornament ─────────────────────────────────────────
+  const anchorStockGeo = new THREE.BoxGeometry(0.1, 1.4, 0.1);
+  const anchorStock = new THREE.Mesh(anchorStockGeo, metalMat);
+  anchorStock.position.set(13.5, 2.4, 1.8);
+  root.add(anchorStock);
+  const anchorArmGeo = new THREE.BoxGeometry(0.9, 0.1, 0.1);
+  const anchorArm = new THREE.Mesh(anchorArmGeo, metalMat);
+  anchorArm.position.set(13.5, 1.7, 1.8);
+  root.add(anchorArm);
+
+  return root;
+}
+
+function createMagellanShipLayer() {
+  return {
+    id: MAGELLAN_SHIP_LAYER_ID,
+    type: 'custom',
+    renderingMode: '3d',
+    onAdd(map, gl) {
+      this.map = map;
+      this.camera = new THREE.Camera();
+      this.scene = new THREE.Scene();
+
+      // Warm sunlight from the east (matches camera bearing 90); cool
+      // bounce fill from the back to keep the shadow side readable.
+      this.scene.add(new THREE.AmbientLight(0xfff1d6, 0.6));
+      const sun = new THREE.DirectionalLight(0xfff2c8, 1.25);
+      sun.position.set(0, 80, 60);
+      this.scene.add(sun);
+      const fill = new THREE.DirectionalLight(0xc6d8ff, 0.35);
+      fill.position.set(-60, 40, -40);
+      this.scene.add(fill);
+
+      this.ship = buildMagellanShip();
+      this.scene.add(this.ship);
+
+      this.renderer = new THREE.WebGLRenderer({
+        canvas: map.getCanvas(),
+        context: gl,
+        antialias: true,
+      });
+      this.renderer.autoClear = false;
+    },
+    render(gl, matrix) {
+      if (!this.map) return;
+      if (!this.map.codexMagellanShipVisible) return;
+      if (!this.scene || !this.renderer) return;
+
+      const cfg = MAGELLAN_SHIP_CONFIG;
+      const shipLng = cfg.anchorLngLat[0] + cfg.offshoreOffset[0];
+      const shipLat = cfg.anchorLngLat[1] + cfg.offshoreOffset[1];
+
+      const merc = mapboxgl.MercatorCoordinate.fromLngLat(
+        [shipLng, shipLat],
+        cfg.altitude,
+      );
+      const mercScale = merc.meterInMercatorCoordinateUnits() * cfg.scale;
+
+      const rotX = THREE.MathUtils.degToRad(cfg.rotation[0] || 0);
+      const rotY = THREE.MathUtils.degToRad(cfg.rotation[1] || 0);
+      const rotZ = THREE.MathUtils.degToRad(cfg.rotation[2] || 0);
+
+      // Mapbox is Z-up; Three.js is Y-up. The PI/2 rotation around X
+      // aligns the ship's deck plane (XZ in Three.js) with the ground.
+      const rotationX = new THREE.Matrix4().makeRotationAxis(
+        new THREE.Vector3(1, 0, 0),
+        Math.PI / 2 + rotX,
+      );
+      const rotationY = new THREE.Matrix4().makeRotationAxis(
+        new THREE.Vector3(0, 1, 0),
+        rotY,
+      );
+      const rotationZ = new THREE.Matrix4().makeRotationAxis(
+        new THREE.Vector3(0, 0, 1),
+        rotZ,
+      );
+
+      // Subtle bob so the ship reads as floating — only animated while
+      // the ship is visible to avoid burning frames otherwise.
+      const t = performance.now() / 1000;
+      this.ship.position.y = Math.sin(t * 0.9) * 0.18;
+      this.ship.rotation.z = Math.sin(t * 0.55) * 0.012;
+
+      const m = new THREE.Matrix4().fromArray(matrix);
+      const l = new THREE.Matrix4()
+        .makeTranslation(merc.x, merc.y, merc.z)
+        .scale(new THREE.Vector3(mercScale, -mercScale, mercScale))
+        .multiply(rotationX)
+        .multiply(rotationY)
+        .multiply(rotationZ);
+
+      this.camera.projectionMatrix = m.multiply(l);
+      this.renderer.resetState();
+      this.renderer.render(this.scene, this.camera);
+      this.map.triggerRepaint();
+    },
+    onRemove() {
+      if (this.scene) {
+        this.scene.traverse((obj) => {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach((mat) => mat.dispose());
+            } else {
+              obj.material.dispose();
+            }
+          }
+        });
+      }
+      // Renderer shares Mapbox's GL context — do NOT call renderer.dispose()
+      // here, that would tear down Mapbox too.
+      this.scene = null;
+      this.ship = null;
+      this.renderer = null;
+      this.camera = null;
+    },
+  };
+}
+
+function ensureMagellanShipLayer(map) {
+  if (!map.isStyleLoaded()) return;
+  if (map.getLayer(MAGELLAN_SHIP_LAYER_ID)) return;
+  safelyApply(() => map.addLayer(createMagellanShipLayer()));
+}
+
+function removeMagellanShipLayer(map) {
+  if (!map.getLayer || !map.getLayer(MAGELLAN_SHIP_LAYER_ID)) return;
+  safelyApply(() => map.removeLayer(MAGELLAN_SHIP_LAYER_ID));
 }
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -571,6 +1123,10 @@ function hideDestinationOverlays(map) {
   if (source) {
     safelyApply(() => source.setData(emptyRouteData));
   }
+
+  // Hide the 3D ship whenever destination overlays go away — keeps it
+  // confined to the Magellan stop and avoids ghost renders elsewhere.
+  map.codexMagellanShipVisible = false;
 }
 
 function getDestinationTourState() {
@@ -597,18 +1153,20 @@ function getDestinationPadding() {
 }
 
 function getDestinationFlightProfile(destination, isNarrow) {
-  // Magellan Landing Site — pulled way back so the southern half of the
-  // Philippines is visible. Uses earth style (city-model has no detail at
-  // this zoom). Slight pitch gives a 3D tilted map view.
+  // Cagusu-an Church and Plaza, Homonhon Island. Cinematic close-up that
+  // frames the offshore Three.js ship + coastline. Desktop uses the
+  // city-model style for terrain + scale detail; mobile drops to the
+  // lighter earth style but still pulls in close enough for the ship to
+  // remain visible against the Philippine Sea.
   if (destination.id === 'magellan-landing-site') {
     return {
-      profile: 'earth',
-      styleUrl: EARTH_STYLE_URL,
-      styleConfig: EARTH_BASEMAP_CONFIG,
+      profile: isNarrow ? 'earth' : 'city-model',
+      styleUrl: isNarrow ? EARTH_STYLE_URL : CITY_MODEL_STYLE_URL,
+      styleConfig: isNarrow ? EARTH_BASEMAP_CONFIG : CITY_BASEMAP_CONFIG,
       camera: isNarrow
-        ? { zoom: 5.8, pitch: 25, bearing: 0 }
-        : { zoom: 6.5, pitch: 30, bearing: 0 },
-      curve: 1.1,
+        ? { zoom: 14.8, pitch: 55, bearing: 90 }
+        : DESTINATION_VIEW_OVERRIDES['magellan-landing-site'],
+      curve: 1.25,
     };
   }
 
@@ -691,6 +1249,13 @@ function applyDestinationTourState(map, tourState) {
     map.codexDestinationMarkerElement.style.opacity = '1';
   }
   setRouteLayersOpacity(map, 0);
+
+  // Toggle the 3D Magellan ship for its dedicated destination only.
+  map.codexMagellanShipVisible =
+    destination.id === MAGELLAN_SHIP_CONFIG.visibleDestinationId;
+  if (map.codexMagellanShipVisible) {
+    ensureMagellanShipLayer(map);
+  }
 
   if (reducedMotion) {
     map.jumpTo({
@@ -1187,6 +1752,10 @@ export default function MapboxEarth() {
   const mapRef = useRef(null);
   const [mapError, setMapError] = useState('');
   const [showRomeSlide, setShowRomeSlide] = useState(false);
+  // Tracks the active map instance so the HUD overlay can subscribe to its
+  // events. Kept separate from `mapRef` because state changes trigger a
+  // re-render — the HUD needs that to mount once the map is ready.
+  const [hudMap, setHudMap] = useState(null);
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
   const setupError = !token
     ? 'Missing VITE_MAPBOX_TOKEN in .env'
@@ -1228,6 +1797,7 @@ export default function MapboxEarth() {
     });
 
     mapRef.current = map;
+    setHudMap(map);
     map.codexSceneProfile = 'earth';
     map.codexRouteAnimating = false;
     map.codexStyleSwitching = false;
@@ -1275,6 +1845,9 @@ export default function MapboxEarth() {
         ensureDestinationOverlays(map);
       }
       ensureFallbackLandmarks(map);
+      // Custom 3D Magellan ship layer — Mapbox tears down custom layers
+      // on every style switch, so re-add it whenever the style reloads.
+      ensureMagellanShipLayer(map);
 
       if (!map.getFog()) {
         map.setFog({
@@ -1338,9 +1911,13 @@ export default function MapboxEarth() {
       mapCanvas.removeEventListener('touchend', endInteraction);
       mapCanvas.removeEventListener('touchcancel', endInteraction);
       stopEarthScrollMotion();
+      // Explicitly remove the 3D ship before tearing down the map so its
+      // onRemove() runs and disposes the Three.js geometry/materials.
+      removeMagellanShipLayer(map);
       disposePreloadMap();
       map.remove();
       mapRef.current = null;
+      setHudMap(null);
     };
   }, [token]);
 
@@ -1349,6 +1926,10 @@ export default function MapboxEarth() {
       <div className="fixed inset-0 z-0">
         <div ref={containerRef} className="h-full w-full" />
       </div>
+
+      {/* Live camera coordinate / debug HUD — remove this line + the MapHud
+          import above to disable the overlay. */}
+      <MapHud map={hudMap} />
 
       {setupError && (
         <div className="fixed left-1/2 top-24 z-50 w-[min(90vw,32rem)] -translate-x-1/2 rounded-lg border border-red-500/40 bg-black/80 p-4 text-sm text-white shadow-2xl backdrop-blur-xl">
