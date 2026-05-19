@@ -4,6 +4,7 @@ export const destinations = [
     name: 'Colosseum',
     location: 'Rome, Italy',
     built: '70-80 AD',
+    eraRange: '264 BC – 476 AD',
     lat: 41.89091,
     lon: 12.49222,
     about:
@@ -15,6 +16,7 @@ export const destinations = [
     name: "Saint Peter's Basilica",
     location: 'Vatican City',
     built: '1506-1626',
+    eraRange: '3rd Century BC – 15th Century AD',
     lat: 41.90305,
     lon: 12.45509,
     about:
@@ -26,12 +28,13 @@ export const destinations = [
     name: "Xi'an City Wall",
     location: "Xi'an, China",
     built: '1374-1378, Ming Dynasty',
-    // Real-world South Gate (Yongning Gate / 永宁门). Mapbox's basemap renders
-    // the actual gate complex slightly north-northwest of the central-avenue
-    // intersection — these coords align the pin with the rendered gatehouse
-    // and barbican, not with the road south of it.
-    lat: 34.25378,
-    lon: 108.94232,
+    eraRange: '1206 AD – 1242 AD',
+    // "Fortifications of Xi'an" — the Google Maps entry, Xincheng District,
+    // postal 710003. Coordinates from OpenStreetMap's "永宁门" tourism
+    // attraction node, which sits dead-center on the South Gate (Yongning
+    // Gate) gatehouse + barbican complex on the south wall.
+    lat: 34.2531039,
+    lon: 108.9423179,
     about:
       'Ming-era city wall enclosing the historic core of Xi\'an, one of the largest and best-preserved ancient city walls in China.',
     significance: 'Imperial Chinese defense and urban heritage',
@@ -41,6 +44,7 @@ export const destinations = [
     name: 'San Salvador Island',
     location: 'San Salvador, Bahamas',
     built: 'Natural island',
+    eraRange: 'August 3, 1492 – November 7, 1504',
     lat: 24.02154,
     lon: -74.49661,
     about:
@@ -52,8 +56,12 @@ export const destinations = [
     name: 'Cagusu-an Church and Plaza',
     location: 'Cagusu-an, Guiuan, Eastern Samar, Philippines',
     built: 'Historic coastal settlement',
-    lat: 10.72253,
-    lon: 125.81815,
+    eraRange: 'September 20, 1519 – September 6, 1522',
+    // Google Maps plus code PRC8+VWJ Guiuan = global OLC 7Q27PRC8+VWJ, which
+    // decodes to a ~0.6m x 0.9m cell at (10.7222025°N, 125.8172539°E) — the
+    // Cagusuan Church & Plaza pin on Homonhon Island.
+    lat: 10.7222025,
+    lon: 125.8172539,
     about:
       'Cagusu-an Church and Plaza area on Homonhon Island, Guiuan, Eastern Samar, near the historical Magellan landing narrative.',
     significance: 'Magellan-era maritime landing history in Eastern Samar',
@@ -63,6 +71,7 @@ export const destinations = [
     name: 'Royal Palace of Madrid',
     location: 'Madrid, Spain',
     built: '1738-1755',
+    eraRange: '1492 – 1900',
     lat: 40.41673,
     lon: -3.71491,
     about:
@@ -74,6 +83,7 @@ export const destinations = [
     name: 'Neuschwanstein Castle',
     location: 'Schwangau, Germany',
     built: '1869-1886',
+    eraRange: '1618 – 1945',
     lat: 47.55775,
     lon: 10.74852,
     about:
@@ -85,6 +95,7 @@ export const destinations = [
     name: 'Buckingham Palace',
     location: 'London, England',
     built: '1703, original townhouse',
+    eraRange: '1870 – 1914',
     lat: 51.50092,
     lon: -0.14282,
     about:
@@ -96,6 +107,7 @@ export const destinations = [
     name: 'Big Ben',
     location: 'London, England',
     built: '1859',
+    eraRange: 'November 2, 1936 – 1939',
     lat: 51.49883,
     lon: -0.12571,
     about:
@@ -107,6 +119,7 @@ export const destinations = [
     name: 'Statue of Liberty',
     location: 'New York, USA',
     built: '1886',
+    eraRange: 'September 2, 1945 – December 25, 1991',
     lat: 40.69142,
     lon: -74.04650,
     about:
@@ -118,6 +131,7 @@ export const destinations = [
     name: 'The White House',
     location: 'Washington, D.C., USA',
     built: '1792-1800',
+    eraRange: 'December 26, 1991 – Present',
     lat: 38.89681,
     lon: -77.03643,
     about:
@@ -129,6 +143,7 @@ export const destinations = [
     name: 'World Trade Center NYC',
     location: 'New York, USA',
     built: 'Rebuilt 2014, One World Trade Center',
+    eraRange: 'September 11, 2001',
     lat: 40.71503,
     lon: -74.00881,
     about:
