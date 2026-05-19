@@ -131,13 +131,6 @@ const setDestinationTourState = (index) => {
   };
 };
 
-const buildLabelFor = (destination) => {
-  if (destination.id === 'world-trade-center-nyc') return 'Rebuilt';
-  if (destination.id === 'magellan-landing-site') return 'Type';
-  if (destination.built === 'Natural island') return 'Type';
-  return 'Built';
-};
-
 export default function Content({ lenisRef }) {
   const containerRef = useRef(null);
   const [activeSection, setActiveSection] = useState(-1);
@@ -222,7 +215,7 @@ export default function Content({ lenisRef }) {
       destinationCards.forEach((card, i) => {
         const panel = card.closest('.destination-section');
         if (!panel) return;
-        const revealEls = card.querySelectorAll('.destination-reveal');
+        const revealEls = panel.querySelectorAll('.destination-reveal');
 
         gsap.set(card, {
           opacity: 0,
@@ -266,6 +259,13 @@ export default function Content({ lenisRef }) {
             opacity: 0,
             y,
             scale: 1,
+            duration: 0.24,
+            ease: 'power2.in',
+            overwrite: true,
+          });
+          gsap.to(revealEls, {
+            opacity: 0,
+            y: y < 0 ? -18 : 18,
             duration: 0.24,
             ease: 'power2.in',
             overwrite: true,
@@ -364,8 +364,12 @@ export default function Content({ lenisRef }) {
 
       const targetIdx = currentIdx === -1 ? 0 : currentIdx + direction;
 
-      // Past the last panel — release to native scroll for the footer.
-      if (targetIdx < 0 || targetIdx >= panels.length) return false;
+      // Above the first panel scrolling up — release to native scroll.
+      if (targetIdx < 0) return false;
+      // At or past the last panel scrolling down — block the wheel event so
+      // the user stays parked at the final landmark (WTC). Returning true
+      // tells handleWheel to call preventDefault and stop the scroll.
+      if (targetIdx >= panels.length) return true;
 
       const target = panels[targetIdx];
       if (!target) return false;
@@ -747,74 +751,24 @@ export default function Content({ lenisRef }) {
         );
       })}
 
-      {destinations.map((destination, index) => {
-        const stopNumber = String(index + 1).padStart(2, '0');
-
-        return (
-          <section
-            id={`destination-${destination.id}`}
-            key={destination.id}
-            className="destination-section panel-section relative w-full overflow-visible"
-            style={{ minHeight: '100vh' }}
-            aria-labelledby={`${destination.id}-title`}
-          >
-            <div
-              className="destination-card pointer-events-auto absolute bottom-6 left-1/2 z-20 box-border w-[min(92vw,44rem)] max-h-[44vh] overflow-y-auto sm:bottom-8 sm:max-h-[42vh] lg:bottom-10 lg:max-h-[36vh] lg:w-[min(78vw,46rem)] xl:w-[min(64vw,52rem)]"
-              style={{ willChange: 'transform, opacity', transform: 'translateX(-50%)' }}
-            >
-              <article className="rounded-lg border border-[#0A6ED3]/30 bg-black/70 p-4 shadow-2xl backdrop-blur-xl sm:p-5 lg:p-6">
-                <div className="destination-reveal flex flex-wrap items-center gap-3">
-                  <span className="rounded-md border border-[#0A6ED3]/50 bg-[#0A6ED3]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
-                    Destination {stopNumber}
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                    {destination.location}
-                  </span>
-                </div>
-
-                <h2
-                  id={`${destination.id}-title`}
-                  className="destination-reveal mt-4 font-sans text-2xl font-bold uppercase leading-none tracking-normal text-white drop-shadow-lg sm:text-3xl lg:text-4xl"
-                >
-                  {destination.name}
-                </h2>
-
-                <dl className="destination-reveal mt-5 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
-                      {buildLabelFor(destination)}
-                    </dt>
-                    <dd className="mt-1 text-sm leading-6 text-gray-200">
-                      {destination.built}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
-                      Location
-                    </dt>
-                    <dd className="mt-1 text-sm leading-6 text-gray-200">
-                      {destination.location}
-                    </dd>
-                  </div>
-                </dl>
-
-                <p className="destination-reveal mt-4 break-words text-sm leading-6 text-gray-300 sm:text-base sm:leading-7">
-                  {destination.about}
-                </p>
-
-                <div className="destination-reveal mt-5 border-t border-white/10 pt-4">
-                  <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-gray-400">
-                    Significance
-                  </h3>
-                  <p className="mt-2 break-words text-sm leading-6 text-gray-300">
-                    {destination.significance}
-                  </p>
-                </div>
-              </article>
-            </div>
-          </section>
-        );
-      })}
+      {destinations.map((destination) => (
+        // Scroll-target section for each landmark. Visible content is
+        // intentionally empty — the user wanted just the navbar visible
+        // during the tour. The invisible .destination-card keeps GSAP's
+        // destination index aligned with destinations[].
+        <section
+          id={`destination-${destination.id}`}
+          key={destination.id}
+          className="destination-section panel-section relative w-full overflow-visible"
+          style={{ minHeight: '100vh' }}
+        >
+          <div
+            className="destination-card pointer-events-none absolute bottom-0 left-1/2 h-px w-px opacity-0"
+            style={{ willChange: 'transform, opacity', transform: 'translateX(-50%)' }}
+            aria-hidden="true"
+          />
+        </section>
+      ))}
 
       {/* ─── FOOTER SPACER ─── */}
       <div className="footer-spacer h-[60vh]" aria-hidden="true" />

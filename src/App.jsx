@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Lenis from 'lenis';
-import MapboxEarth from './components/MapboxEarth';
+import CesiumEarth from './components/CesiumEarth';
 import Content from './components/Content';
 import LoadingScreen from './components/LoadingScreen';
 import IntroSequence from './components/IntroSequence';
@@ -128,7 +128,7 @@ function App() {
 
       {/* Immersive 3D Earth Layer (Fixed Background) */}
       <Suspense fallback={<LoadingScreen />}>
-        <MapboxEarth />
+        <CesiumEarth />
       </Suspense>
 
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}

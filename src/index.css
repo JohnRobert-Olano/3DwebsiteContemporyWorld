@@ -29,11 +29,10 @@ h1, h2, h3, h4, h5, h6, .font-sans {
   border: 1px solid rgba(10, 110, 211, 0.2);
 }
 
-.mapboxgl-ctrl-logo,
-.mapboxgl-ctrl-bottom-left,
-.mapboxgl-ctrl-bottom-right {
-  display: none !important;
-}
+/* Hide the default Cesium watermark/logo; Google attribution still shows via
+   the credit container inside CesiumEarth (required by Google ToS). */
+.cesium-viewer-bottom { display: none !important; }
+.cesium-widget-credits { display: none !important; }
 
 .destination-map-marker {
   position: relative;
@@ -105,6 +104,31 @@ h1, h2, h3, h4, h5, h6, .font-sans {
 
 @media (prefers-reduced-motion: reduce) {
   .destination-map-marker__pulse {
+    animation: none;
+  }
+}
+
+@keyframes colosseum-float {
+  0%, 100% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.colosseum-float {
+  animation: colosseum-float 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.colosseum-float--delayed {
+  animation-delay: -2.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .colosseum-float,
+  .colosseum-float--delayed {
     animation: none;
   }
 }

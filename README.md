@@ -1,6 +1,6 @@
 # World View — Contemporary World 3D
 
-An immersive, scroll-driven website that explores globalization through a live 3D interactive globe. The experience begins with a cinematic intro sequence, guides the user through five thematic sections on globalization, then launches a world tour of twelve landmark destinations rendered in real-time 3D via Mapbox GL.
+An immersive, scroll-driven website that explores globalization through a live 3D interactive globe. The experience begins with a cinematic intro sequence, guides the user through five thematic sections on globalization, then launches a world tour of twelve landmark destinations rendered in real-time 3D using **CesiumJS + Google Maps Platform Photorealistic 3D Tiles**.
 
 ---
 
@@ -14,17 +14,14 @@ An immersive, scroll-driven website that explores globalization through a live 3
 - [Architecture](#architecture)
   - [App Entry Point](#app-entry-point)
   - [Intro Sequence](#intro-sequence)
-  - [3D Globe (MapboxEarth)](#3d-globe-mapboxearth)
+  - [3D Globe (CesiumEarth)](#3d-globe-cesiumearth)
   - [Scrollytelling Layer (Content)](#scrollytelling-layer-content)
   - [Slide Panel](#slide-panel)
   - [Scroll Progress Bar](#scroll-progress-bar)
 - [Destinations Data](#destinations-data)
 - [Globe Behavior](#globe-behavior)
-  - [Scene Profiles](#scene-profiles)
   - [Rome Descent](#rome-descent)
   - [World Tour Flights](#world-tour-flights)
-  - [Tile Preloading](#tile-preloading)
-  - [Custom 3D Fallback Landmarks](#custom-3d-fallback-landmarks)
   - [Earth Idle Animation](#earth-idle-animation)
 - [Globalization Sections](#globalization-sections)
 - [Navigation](#navigation)
@@ -36,7 +33,7 @@ An immersive, scroll-driven website that explores globalization through a live 3
 
 ## Overview
 
-World View is a single-page, scroll-driven experience built around a persistent Mapbox GL globe that reacts to scroll position and section context. The user journey is:
+World View is a single-page, scroll-driven experience built around a persistent CesiumJS globe (rendering Google Photorealistic 3D Tiles) that reacts to scroll position and section context. The user journey is:
 
 1. **Intro** — A cinematic "WORLD VIEW" wordmark orbits a virtual 3D cylinder with a lens flare and starfield, then fades out to reveal the live globe.
 2. **Globalization Sections** — Five GSAP-pinned panels (Culture, Economy, Environment, Politics, Technology) appear as ping-pong cards while the globe tilts responsively left and right.
@@ -51,7 +48,8 @@ World View is a single-page, scroll-driven experience built around a persistent 
 |---|---|---|
 | UI framework | React | ^19.2 |
 | Build tool | Vite | ^8.0 |
-| 3D map / globe | Mapbox GL JS | ^3.23 |
+| 3D globe renderer | CesiumJS | ^1.123 |
+| Photorealistic 3D tiles | Google Maps Platform — Map Tiles API | — |
 | Scroll animation | GSAP + ScrollTrigger | ^3.15 |
 | UI animation | Framer Motion | ^12.38 |
 | Smooth scroll | Lenis | ^1.3 |
@@ -71,7 +69,7 @@ src/
 ├── App.css
 │
 ├── components/
-│   ├── MapboxEarth.jsx      # Live 3D globe — all camera logic, scene switching, preloading
+│   ├── CesiumEarth.jsx      # Live 3D globe — Cesium Viewer + Google Photorealistic 3D Tiles, all camera logic
 │   ├── Content.jsx          # GSAP scrollytelling — section cards + destination cards
 │   ├── IntroSequence.jsx    # Cinematic "WORLD VIEW" wordmark animation
 │   ├── SlidePanel.jsx       # Slide-in info panel (Colosseum slide at Rome descent end)
@@ -118,19 +116,43 @@ npm run preview
 npm run lint
 ```
 
-Requires Node 18+ and a valid Mapbox public token (see below).
+Requires Node 18+ and two API credentials (see below).
 
 ---
 
 ## Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env.local` file in the project root (auto-gitignored by the `.env*` / `*.local` rules):
 
 ```env
-VITE_MAPBOX_TOKEN=pk.your_mapbox_public_token_here
+VITE_GOOGLE_MAPS_API_KEY=AIza...
+VITE_CESIUM_ION_TOKEN=eyJh...
 ```
 
-The token must start with `pk.`. If missing or invalid, a setup-error banner is shown in the UI and the globe will not load. The token is read at runtime via `import.meta.env.VITE_MAPBOX_TOKEN`.
+If either is missing, a setup-error banner is shown in the UI and the globe will not load.
+
+> **Full step-by-step setup guide:** see [docs/setup-3d-tiles.md](docs/setup-3d-tiles.md) for screenshots-style instructions, billing setup, key restrictions, verification, and troubleshooting.
+
+### Google Maps Platform — Map Tiles API key
+
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and select (or create) a project.
+2. Enable the **Map Tiles API** (Library → search "Map Tiles API" → Enable). This is a different product from the Maps JavaScript API — the photorealistic 3D tiles ride only on the Tiles API.
+3. Credentials → Create credentials → API key.
+4. Restrict the key:
+   - **Application restriction:** HTTP referrers. Add `http://localhost:*/*`, `http://127.0.0.1:*/*`, and your production domain.
+   - **API restriction:** Map Tiles API only.
+5. **Pricing:** $0.005 per session-based request after the free monthly quota. A "session" lasts about 15 min per user; dev hot-reload counts as new sessions. Set a billing budget alert in `Billing → Budgets & alerts`.
+
+### Cesium Ion token
+
+Sign up free at <https://ion.cesium.com/> and generate a default token under **Access Tokens**. The token is used for Cesium's built-in default assets (skybox, default fonts) and to suppress the no-token startup warning.
+
+### Verify the Google key
+
+```
+curl "https://tile.googleapis.com/v1/3dtiles/root.json?key=YOUR_KEY"
+```
+Expect `200` with a JSON tileset descriptor. `403` means the key isn't enabled for the Map Tiles API, or the referrer restriction is blocking the request (curl sends no Referer — re-test from the browser console on `localhost`).
 
 ---
 
@@ -144,7 +166,7 @@ The token must start with `pk.`. If missing or invalid, a setup-error banner is 
 - **Intro gate** — `introActive` state keeps `<IntroSequence>` mounted. When the animation completes it calls `handleIntroComplete`, which dismisses the intro and starts Lenis.
 - **Home / reset** — Clicking "Home" in the navbar triggers `handleHomeClick`, which fades in a loading spinner, jumps the scroll to the top instantly (behind the overlay), dispatches a `resetGlobe` custom event, and waits for the `globeResetComplete` response before fading back out.
 - **Navbar** — Glassmorphism pill with Home and Timeline links, fixed center-top.
-- **Layer order** — `MapboxEarth` (fixed, `z-0`) sits behind the GSAP `Content` layer (`z-10`). The intro overlay sits at `z-[200]`.
+- **Layer order** — `CesiumEarth` (fixed, `z-0`) sits behind the GSAP `Content` layer (`z-10`). The intro overlay sits at `z-[200]`.
 
 ---
 
@@ -174,83 +196,61 @@ Pressing **Escape** rewinds the RAF clock to the outro phase for a fast skip.
 
 ---
 
-### 3D Globe (MapboxEarth)
+### 3D Globe (CesiumEarth)
 
-[src/components/MapboxEarth.jsx](src/components/MapboxEarth.jsx)
+[src/components/CesiumEarth.jsx](src/components/CesiumEarth.jsx)
 
-The heart of the experience. A single Mapbox GL instance is mounted fixed behind all content and never unmounted for the lifetime of the page.
+The heart of the experience. A single Cesium `Viewer` is mounted fixed behind all content and never unmounted for the lifetime of the page. The visible Earth is **Google Photorealistic 3D Tiles** loaded as a `Cesium3DTileset`; the default Cesium globe and imagery layers are disabled.
 
-#### Map Configuration
+#### Viewer Configuration
 
-- **Projection:** `globe`
-- **Initial view:** Colosseum coordinates, zoom 1.35, pitch/bearing 0
-- **Scroll zoom:** disabled (page scroll must pass through)
-- **User interaction:** drag pan + rotate, double-click zoom, pinch-zoom on touch all enabled
+- **Tileset:** `Cesium3DTileset.fromUrl("https://tile.googleapis.com/v1/3dtiles/root.json?key=...", { showCreditsOnScreen: true })` — the `showCreditsOnScreen` flag is mandatory per Google ToS.
+- **Initial view:** Colosseum coordinates, height derived from zoom 1.35 (~22 000 km), pitch/heading 0.
+- **Stripped chrome:** animation widget, timeline, baseLayerPicker, geocoder, homeButton, sceneModePicker, navigationHelpButton, fullscreenButton, infoBox, selectionIndicator are all disabled.
+- **User interaction:** Cesium's default `screenSpaceCameraController` is left on — drag pan, right-click orbit, wheel zoom, pinch zoom all work. Pointer / touch events on the canvas flip a `userInteracting` flag that the RAF camera driver yields to.
 
-#### Cinematic Lighting
+#### Camera Math
 
-Custom lights are applied on every style load via `setCinematicLights()`:
+The existing Mapbox-shaped keyframes (`center: [lon, lat]`, `zoom`, `pitch`, `bearing`) are kept verbatim in the source so the tuning comments still apply. They are converted to Cesium poses at the boundary:
 
-```
-ambient: color #d6c4ff (lavender), intensity 0.38
-directional: color #ffb36a (warm gold), direction [238, 54], intensity 0.82
-             cast-shadows: true, shadow-intensity 0.72
-```
+- `zoom` → `height` (meters) via an empirical lookup table ([src/lib/cesium/zoomToHeight.js](src/lib/cesium/zoomToHeight.js)); interpolated logarithmically.
+- `pitch` (Mapbox: 0 = top-down, 85 = horizon) → `pitch` (Cesium: `mapboxPitch - 90`, so −90 = top-down, 0 = horizon), then `Math.toRadians`.
+- `bearing` → `heading` (same convention, just radians).
+- `flyTo` durations: Mapbox milliseconds → Cesium seconds. Cesium uses a fixed `easingFunction` enum (`CUBIC_OUT`); the Mapbox `curve`/`speed` parameters have no direct equivalent and are dropped.
 
-#### Atmosphere / Fog
+Helpers live in [src/lib/cesium/cameraController.js](src/lib/cesium/cameraController.js): `setCameraPose` (instant), `flyToPose` (animated), `lerpMapboxPoses` (used by the Rome scrub), `readCameraAsMapboxPose` (used by the HUD), `projectLngLat` (used by the Colosseum connector lines).
 
-```
-color: rgb(8, 12, 24)       — dark horizon
-high-color: rgb(36, 92, 170) — blue atmosphere band
-horizon-blend: 0.08
-space-color: rgb(2, 4, 12)
-star-intensity: 0.45
-```
+#### window.codexMap shim
 
-#### Terrain
-
-Mapbox DEM terrain is added on every style load with zoom-interpolated exaggeration (0.32 at zoom 6 → 0 at zoom 15), giving depth to the descent without distorting city-level views.
-
----
-
-### Scene Profiles
-
-The map switches between two Mapbox styles depending on context:
-
-| Profile | Style | 3D Buildings | Labels | Used When |
-|---|---|---|---|---|
-| `earth` | Custom earth style | Off | All hidden | Globe view, idle, Rome first half |
-| `city-model` | Custom city style | On (faded theme) | All hidden | Rome second half, destination close-ups |
-
-Style switching is serialized via `map.codexStyleSwitching` flag. If a switch is already in progress, subsequent requests are dropped. After every style load, lights + terrain + fallback landmarks are re-applied.
+To preserve the `Content.jsx` + `MapHud.jsx` consumer code, a `window.codexMap` object is exposed with a Mapbox-style API surface: `project([lon, lat])`, `getCenter()`, `getZoom()`, `getPitch()`, `getBearing()`, `getFreeCameraOptions()`, and `on/off` (all event names dispatch on Cesium's `camera.changed`). An escape hatch `_viewer` exposes the raw Cesium Viewer for any future code that needs native APIs.
 
 ---
 
 ### Rome Descent
 
-The Rome section is the only scroll-scrubbed camera sequence. `window.romeModeActive` and `window.romeScrollProgress` (0→1) are written by a GSAP ScrollTrigger in `Content.jsx` and read every RAF tick in `MapboxEarth`.
+The Rome section is the only scroll-scrubbed camera sequence. `window.romeModeActive` and `window.romeScrollProgress` (0→1) are written by a GSAP ScrollTrigger in `Content.jsx` and read every RAF tick in `CesiumEarth`. Each tick calls `setCameraPose()` (Cesium `camera.setView`, no animation) so the camera tracks the scroll exactly.
 
-**Phase 1 (progress 0→0.5) — Earth style:**
+**Phase 1 (progress 0→0.5):**
 Camera lerps from global idle (`zoom 1.35`) to Rome overview (`zoom 5.5, pitch 38°`).
 
-**Phase 2 (progress 0.5→1) — City-model style:**
-Camera lerps from Rome overview down to street-level Colosseum (`zoom 16.6, pitch 76°, bearing -32°`).
+**Phase 2 (progress 0.5→1):**
+Camera lerps from Rome overview down to street-level Colosseum (`zoom 17.6, pitch 70°, bearing -15.2°`).
 
-At `progress >= 0.92` the `SlidePanel` (Colosseum info card) slides in from the right. At `progress > 0.3` tile preloading for the Colosseum destination begins.
+At `progress >= 0.92` the `SlidePanel` (Colosseum info card) slides in from the right.
 
 Keyframes:
 
 ```
 earth.start  → center: [12.49, 22],   zoom: 1.35, pitch: 0,  bearing: 0
 earth.mid    → center: [12.50, 41.90], zoom: 5.5,  pitch: 38, bearing: -16
-city.end     → center: [12.49, 41.89], zoom: 16.6, pitch: 76, bearing: -32
+city.end     → center: [12.49, 41.89], zoom: 17.6, pitch: 70, bearing: -15.2
 ```
 
 ---
 
 ### World Tour Flights
 
-After the Rome descent, scrolling through twelve destination sections each triggers an automatic `flyTo` (not scroll-scrubbed). `Content.jsx` writes to `window.destinationTourState` and `window.destinationTourActive`; `MapboxEarth` picks these up each RAF tick and calls `applyDestinationTourState()`.
+After the Rome descent, scrolling through twelve destination sections each triggers an automatic `viewer.camera.flyTo` (not scroll-scrubbed). `Content.jsx` writes to `window.destinationTourState` and `window.destinationTourActive`; `CesiumEarth` picks these up each RAF tick and calls `applyDestinationTourState()`.
 
 Each destination has a custom camera override in `DESTINATION_VIEW_OVERRIDES`:
 
@@ -267,34 +267,9 @@ Each destination has a custom camera override in `DESTINATION_VIEW_OVERRIDES`:
 | White House | 17.4 | 68° | 180° | North Portico front view |
 | World Trade Center | 15.8 | 65° | 180° | Pulled back to fit spire |
 | San Salvador Island | 14.5 | 60° | 0° | 3D angled bird's-eye |
-| Magellan Landing Site | 6.5 | 30° | 0° | Wide earth view (no city tiles) |
+| Magellan Landing Site | 17.5 | 75° | 34.4° | Pulled back from Mapbox pitch 85° to avoid terrain clipping in Cesium |
 
-On **mobile** (`innerWidth < 768`), all destinations use the earth style at zoom ~6.2 to avoid loading heavy city-model tiles on smaller connections.
-
----
-
-### Tile Preloading
-
-An invisible offscreen Mapbox instance (640×480, `left: -9999px`) is kept running for the page lifetime. While the user dwells on destination N, `queueDestinationPreload()` jumps the preload map to destination N+1 so its tiles land in the browser HTTP cache before the next `flyTo` runs.
-
-- Skipped on mobile and under `prefers-reduced-motion`
-- Serialized queue — only one preload runs at a time
-- 8-second hard timeout per destination
-- Destinations already cached are deduped
-
----
-
-### Custom 3D Fallback Landmarks
-
-Mapbox's built-in 3D landmarks only exist for major cities. Three destinations have no native 3D data; hand-crafted GeoJSON `fill-extrusion` polygons substitute:
-
-**Xi'an City Wall** — A hollow rectangle (outer ring + inner hole) approximating the Ming-era wall perimeter (~870 × 800 m at focal scale), plus a taller south gate tower block at the Yongning Gate position.
-
-**San Salvador Island** — An elliptical island ring (32-point polygon, ~620 × 375 m half-axes) plus a slender lighthouse marker (6 m square, 32 m tall) at center.
-
-**Magellan Landing Site** — A low rectangular memorial platform (~35 × 15 m) plus a narrow vertical marker (6 m square, 18 m tall).
-
-All extrusions fade in from zoom 10→12 and reach full opacity at zoom 12+.
+Mobile (`innerWidth < 768`) uses a shorter flight duration (1.5 s vs 2.2 s) and the same destination framing — Google Photorealistic 3D Tiles handles all zoom levels with one tileset, so there is no mobile-specific "lighter" profile.
 
 ---
 
@@ -304,7 +279,7 @@ When the globe is not in Rome mode or destination tour mode, a `requestAnimation
 
 - **Auto-rotation** — longitude advances at 1.45°/second
 - **Bobbing** — latitude oscillates with `sin(time * 1.5) * 1.5°`
-- **Tilt response** — when a globalization section is active, `window.globeTargetDirection` (-1 or 1) is read each tick. The globe tilts, banks, zooms out, and pads toward the opposite side of the screen so the content card has room. The transition uses an ease factor of 0.012 per frame for smooth inertia.
+- **Tilt response** — when a globalization section is active, `window.globeTargetDirection` (-1 or 1) is read each tick. The globe tilts, banks, zooms toward the active edge, and shifts its target longitude ~6° so the content card has room. The transition uses an ease factor of 0.012 per frame for smooth inertia. (Note: Cesium has no `padding` equivalent of Mapbox; the side-shift is approximated by nudging the target longitude rather than by viewport padding — re-tune the constant in [src/components/CesiumEarth.jsx](src/components/CesiumEarth.jsx) if the framing feels off.)
 
 ---
 
@@ -329,7 +304,7 @@ Each pin covers `+=150%` of scroll distance (fast pin-hold-release rhythm).
 
 Twelve sections follow the ping-pong sections. Each is pinned for `+=85%`. On `onEnter`/`onEnterBack`:
 1. The destination card fades in from below
-2. `window.destinationTourState` is updated, triggering the globe flight in MapboxEarth
+2. `window.destinationTourState` is updated, triggering the globe flight in CesiumEarth
 
 The Colosseum section (index 0) additionally renders a **floating gladiatorial painting** — *Pollice Verso* by Jean-Léon Gérôme (1872, public domain) — positioned at the top of the section with a gentle CSS float animation (`spartan-float`, 4s ease-in-out).
 
@@ -394,15 +369,15 @@ A full-screen overlay triggered by a hamburger button (top-right, visible during
 
 ## Global Window State
 
-MapboxEarth and Content communicate exclusively through shared `window` properties, avoiding prop drilling across the component tree:
+CesiumEarth and Content communicate exclusively through shared `window` properties, avoiding prop drilling across the component tree:
 
 | Property | Type | Written by | Read by | Purpose |
 |---|---|---|---|---|
-| `window.romeModeActive` | `boolean` | Content | MapboxEarth | Is the Rome descent ScrollTrigger active? |
-| `window.romeScrollProgress` | `0–1` | Content | MapboxEarth | Normalized scroll progress within Rome descent |
-| `window.destinationTourActive` | `boolean` | Content | MapboxEarth | Is a destination section pinned? |
-| `window.destinationTourState` | `{index, progress, requestedAt}` | Content | MapboxEarth | Which destination and how far in |
-| `window.globeTargetDirection` | `-1 \| 0 \| 1` | Content | MapboxEarth | Which side of screen the card is on |
+| `window.romeModeActive` | `boolean` | Content | CesiumEarth | Is the Rome descent ScrollTrigger active? |
+| `window.romeScrollProgress` | `0–1` | Content | CesiumEarth | Normalized scroll progress within Rome descent |
+| `window.destinationTourActive` | `boolean` | Content | CesiumEarth | Is a destination section pinned? |
+| `window.destinationTourState` | `{index, progress, requestedAt}` | Content | CesiumEarth | Which destination and how far in |
+| `window.globeTargetDirection` | `-1 \| 0 \| 1` | Content | CesiumEarth | Which side of screen the card is on |
 | `window.codexLenis` | `Lenis` | App | Content | Shared Lenis instance for smooth scrollTo |
 
 ---
