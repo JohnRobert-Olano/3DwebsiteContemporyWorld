@@ -5,8 +5,14 @@ export const destinations = [
     location: 'Rome, Italy',
     built: '70-80 AD',
     eraRange: '264 BC – 476 AD',
-    lat: 41.89104,
-    lon: 12.49221,
+    lat: 41.89191,
+    lon: 12.49143,
+    camera: {
+      zoom: 17.79,
+      pitch: 59.5,
+      bearing: 336.8,
+      altitude: 0,
+    },
     about:
       'Ancient Roman amphitheater, the largest ever built. Iconic symbol of Imperial Rome and Roman engineering.',
     significance: 'Imperial spectacle and Roman engineering',
@@ -17,8 +23,14 @@ export const destinations = [
     location: 'Vatican City',
     built: '1506-1626',
     eraRange: '3rd Century BC – 15th Century AD',
-    lat: 41.90305,
-    lon: 12.45509,
+    lat: 41.90484,
+    lon: 12.45344,
+    camera: {
+      zoom: 17.57,
+      pitch: 72.7,
+      bearing: 313.7,
+      altitude: 0,
+    },
     about:
       'Renaissance-era church, one of the holiest Catholic sites in the world. Designed by Michelangelo and Bernini.',
     significance: 'Renaissance sacred architecture',
@@ -60,8 +72,14 @@ export const destinations = [
     // Google Maps plus code PRC8+VWJ Guiuan = global OLC 7Q27PRC8+VWJ, which
     // decodes to a ~0.6m x 0.9m cell at (10.7222025°N, 125.8172539°E) — the
     // Cagusuan Church & Plaza pin on Homonhon Island.
-    lat: 10.7222025,
-    lon: 125.8172539,
+    lat: 10.72131,
+    lon: 125.81604,
+    camera: {
+      zoom: 17.25,
+      pitch: 67.6,
+      bearing: 260.9,
+      altitude: 0,
+    },
     about:
       'Cagusu-an Church and Plaza area on Homonhon Island, Guiuan, Eastern Samar, near the historical Magellan landing narrative.',
     significance: 'Magellan-era maritime landing history in Eastern Samar',
@@ -72,8 +90,14 @@ export const destinations = [
     location: 'Madrid, Spain',
     built: '1738-1755',
     eraRange: '1492 – 1900',
-    lat: 40.41673,
-    lon: -3.71491,
+    lat: 40.43698,
+    lon: -3.72667,
+    camera: {
+      zoom: 15.87,
+      pitch: 73.9,
+      bearing: 334.6,
+      altitude: 0,
+    },
     about:
       'Official residence of the Spanish royal family, one of the largest palaces in Europe with 3,418 rooms.',
     significance: 'Spanish monarchy and European palace architecture',

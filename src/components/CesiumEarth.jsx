@@ -27,7 +27,7 @@ const ROME_SLIDE = {
 };
 
 const ROME = [12.4964, 41.9028];
-const COLOSSEUM = { center: [12.49221, 41.89104] };
+const COLOSSEUM = { center: [12.49143, 41.89191] };
 const EARTH_IDLE_CENTER = [12.4922, 22];
 const EARTH_ROTATION_DEGREES_PER_SECOND = 1.45;
 const EARTH_MOTION_EASE = 0.012;
@@ -42,21 +42,21 @@ const ROME_KEYFRAMES = {
   },
   city: {
     mid: { center: ROME, zoom: 5.5, pitch: 38, bearing: -16 },
-    end: { center: COLOSSEUM.center, zoom: 17.82, pitch: 59.9, bearing: 352.2 },
+    end: { center: COLOSSEUM.center, zoom: 17.79, pitch: 59.5, bearing: 336.8 },
   },
 };
 
 // Per-destination camera framing. Mapbox-shaped (zoom/pitch/bearing) for parity
 // with the original tuning comments; converted on use.
 const DESTINATION_VIEW_OVERRIDES = {
-  'colosseum': { zoom: 17.82, pitch: 59.9, bearing: 352.2 },
-  'saint-peters-basilica': { zoom: 17.5, pitch: 80.1, bearing: -51.6 },
+  'colosseum': { zoom: 17.79, pitch: 59.5, bearing: 336.8, altitude: 0 },
+  'saint-peters-basilica': { zoom: 17.57, pitch: 72.7, bearing: 313.7, altitude: 0 },
   // Xi'an falls in Google's photogrammetry coverage gap (no 3D mesh for any
   // Chinese city). At ground level the wall reads as flat satellite imagery,
   // so frame it as an oblique aerial instead — the full ~3.4 km × 2.6 km
   // rectangular fortification + moat is unmistakable from this altitude.
   'xian-city-wall': { zoom: 14, pitch: 45, bearing: 0 },
-  'royal-palace-madrid': { zoom: 18.0, pitch: 73.5, bearing: -28.7 },
+  'royal-palace-madrid': { zoom: 15.87, pitch: 73.9, bearing: 334.6, altitude: 0 },
   'neuschwanstein-castle': { zoom: 18.3, pitch: 79.7, bearing: -84.3 },
   'buckingham-palace': { zoom: 18.0, pitch: 73.5, bearing: -97.2 },
   'big-ben': { zoom: 17.4, pitch: 76.5, bearing: -146.4 },
@@ -67,7 +67,7 @@ const DESTINATION_VIEW_OVERRIDES = {
   // Original Mapbox pitch was 85 (near-horizon). At Cesium height 280 m this
   // would clip the camera into terrain — pulled back to pitch 75 / zoom 17.5
   // to keep the photogrammetry in frame. Re-tune in dev if needed.
-  'magellan-landing-site': { zoom: 17.5, pitch: 75.0, bearing: 34.4 },
+  'magellan-landing-site': { zoom: 17.25, pitch: 67.6, bearing: 260.9, altitude: 0 },
 };
 
 const easeInOutCubic = (t) =>
@@ -84,7 +84,8 @@ function destinationToLngLat(destination) {
 }
 
 function getDestinationCamera(destination) {
-  return DESTINATION_VIEW_OVERRIDES[destination.id]
+  return destination.camera
+    || DESTINATION_VIEW_OVERRIDES[destination.id]
     || { zoom: 17.6, pitch: 70, bearing: 0 };
 }
 
@@ -118,7 +119,7 @@ function applyRomeReducedMotionState(viewer, progress, codex) {
   if (codex.userInteracting) return;
   const pose = progress >= 0.5
     ? poseFromMapbox(
-      { center: COLOSSEUM.center, zoom: 17.82, pitch: 59.9, bearing: 352.2 },
+      { center: COLOSSEUM.center, zoom: 17.79, pitch: 59.5, bearing: 336.8 },
       DESTINATION_VIEW_OVERRIDES['colosseum']?.altitude ?? codex.elevations.get('colosseum') ?? 30,
     )
     : poseFromMapbox(
