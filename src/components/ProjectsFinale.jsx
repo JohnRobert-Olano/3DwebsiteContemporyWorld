@@ -30,16 +30,16 @@ const LOOP_COPIES = 2;
 const TOTAL_VIRTUAL = PROJECT_COUNT * (1 + LOOP_COPIES * 2);
 const START_SEQUENCE = PROJECT_COUNT * LOOP_COPIES;
 
-const BG_GALLERY = '#f8f8f5';
-const TEXT_DARK = '#151514';
-const TEXT_META = '#65655f';
-const TEXT_MUTED = '#9a9a92';
-const BORDER_CARD = 'rgba(28,28,24,0.2)';
-const FOCUS_RING = '#191917';
+const BG_GALLERY = 'var(--bg)';
+const TEXT_DARK = '#ffffff';
+const TEXT_META = 'rgba(255, 255, 255, 0.7)';
+const TEXT_MUTED = 'rgba(255, 255, 255, 0.45)';
+const BORDER_CARD = 'rgba(255, 255, 255, 0.12)';
+const FOCUS_RING = 'var(--accent)';
 const SHADOW_ACTIVE =
-  '0 30px 84px rgba(22,22,18,0.18), 0 10px 26px rgba(22,22,18,0.12), inset 0 0 0 1px rgba(255,255,255,0.42)';
+  '0 30px 84px rgba(0,0,0,0.6), 0 10px 26px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.15)';
 const SHADOW_DEFAULT =
-  '0 20px 54px rgba(22,22,18,0.12), 0 3px 12px rgba(22,22,18,0.08), inset 0 0 0 1px rgba(255,255,255,0.34)';
+  '0 20px 54px rgba(0,0,0,0.4), 0 3px 12px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.08)';
 
 const NOISE_TEXTURE =
   'url("data:image/svg+xml,%3Csvg viewBox=%270 0 220 220%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.85%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23n)%27 opacity=%270.038%27/%3E%3C/svg%3E")';
@@ -47,10 +47,10 @@ const NOISE_TEXTURE =
 // Single fallback for when the project image fails to load. The covers in the
 // reference (unveil.fr) are full-bleed images on translucent glass panes —
 // per-card color treatments are intentionally removed.
-const FALLBACK_PAPER_BG = 'linear-gradient(155deg, #fafaf6 0%, #e8e6dd 100%)';
+const FALLBACK_PAPER_BG = 'linear-gradient(155deg, rgba(20,20,22,0.85) 0%, rgba(10,10,12,0.95) 100%)';
 const LABEL_LIGHT = 'rgba(255,255,255,0.84)';
-const LABEL_DARK = 'rgba(20,20,18,0.58)';
-const LABEL_SHADOW = '0 1px 4px rgba(0,0,0,0.55)';
+const LABEL_DARK = 'rgba(255,255,255,0.84)';
+const LABEL_SHADOW = '0 1px 4px rgba(0,0,0,0.6)';
 
 const TEXT_FIXES = [
   [/\u00c2\u00b7/g, ' / '],
@@ -108,7 +108,7 @@ function ProjectCover({ project, index, isActive = false }) {
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
           style={{
-            opacity: isActive ? 0.96 : 0.86,
+            opacity: isActive ? 0.90 : 0.70,
             transition: 'opacity 0.4s ease',
           }}
         />
@@ -192,7 +192,8 @@ function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
         backfaceVisibility: 'hidden',
         zIndex: 1000 - sequenceIndex,
         border: `1px solid ${BORDER_CARD}`,
-        background: 'rgba(248,247,242,0.3)',
+        background: 'rgba(15, 15, 15, 0.45)',
+        backdropFilter: 'blur(10px)',
         boxShadow: isActive ? SHADOW_ACTIVE : SHADOW_DEFAULT,
         filter: isActive ? 'brightness(1.02) saturate(1.04)' : 'brightness(0.94) saturate(0.92)',
         opacity,
@@ -218,7 +219,8 @@ function GridCard({ project, index, onOpen }) {
       className="group relative aspect-[16/11] cursor-pointer overflow-hidden rounded-[2px] p-0 text-left outline-none transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4"
       style={{
         border: `1px solid ${BORDER_CARD}`,
-        background: '#f4f3ee',
+        background: 'rgba(15, 15, 15, 0.45)',
+        backdropFilter: 'blur(10px)',
         boxShadow: SHADOW_DEFAULT,
         outlineColor: FOCUS_RING,
       }}
@@ -255,7 +257,8 @@ function FullscreenView({ project, onClose, reducedMotion }) {
         className="relative z-[81] flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)]"
         style={{
           transformOrigin: 'center center',
-          background: BG_GALLERY,
+          background: 'rgba(18, 18, 18, 0.82)',
+          backdropFilter: 'blur(24px)',
           border: `1px solid ${BORDER_CARD}`,
         }}
         initial={
@@ -280,11 +283,12 @@ function FullscreenView({ project, onClose, reducedMotion }) {
           type="button"
           onClick={onClose}
           aria-label="Close project"
-          className="absolute right-4 top-4 z-10 cursor-pointer rounded-full p-2 outline-none transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="absolute right-4 top-4 z-10 cursor-pointer rounded-full p-2 outline-none transition-colors hover:bg-white hover:text-black focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             border: `1px solid ${BORDER_CARD}`,
-            background: 'rgba(245,244,239,0.88)',
-            color: TEXT_META,
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(4px)',
+            color: 'rgba(255, 255, 255, 0.8)',
             outlineColor: FOCUS_RING,
           }}
         >
@@ -560,7 +564,7 @@ export default function ProjectsFinale() {
             </div>
             <h2
               className="mt-3 text-3xl font-bold leading-tight tracking-normal sm:text-4xl lg:text-5xl"
-              style={{ color: TEXT_DARK, letterSpacing: 0 }}
+              style={{ color: TEXT_DARK, letterSpacing: 0, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}
             >
               {cleanText(activeProject.title)}
             </h2>
@@ -617,7 +621,8 @@ export default function ProjectsFinale() {
             <div
               className="pointer-events-auto absolute bottom-8 right-8 z-30 flex items-center gap-1 rounded-full p-1 backdrop-blur-sm"
               style={{
-                background: 'rgba(245,244,239,0.86)',
+                background: 'rgba(15, 15, 15, 0.65)',
+                backdropFilter: 'blur(12px)',
                 border: `1px solid ${BORDER_CARD}`,
               }}
             >
@@ -634,14 +639,14 @@ export default function ProjectsFinale() {
                     aria-label={`Switch to ${viewMode.toLowerCase()} view`}
                     className={`rounded-full px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.28em] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                       active
-                        ? 'text-white'
+                        ? 'text-black'
                         : disabled
                           ? 'cursor-not-allowed'
-                          : 'cursor-pointer hover:text-[#1a1917]'
+                          : 'cursor-pointer hover:text-white'
                     }`}
                     style={{
-                      background: active ? TEXT_DARK : 'transparent',
-                      color: active ? '#fff' : disabled ? TEXT_MUTED : TEXT_META,
+                      background: active ? '#ffffff' : 'transparent',
+                      color: active ? '#000000' : disabled ? TEXT_MUTED : TEXT_META,
                       outlineColor: FOCUS_RING,
                     }}
                   >
