@@ -91,34 +91,36 @@ function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.6, ease: "easeInOut" }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-[#080808]/90 backdrop-blur-md"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl"
           >
             <div className="relative flex flex-col items-center justify-center">
-               <div className="w-24 h-24 border-4 border-t-[#0A6ED3] border-r-transparent border-b-[#0A6ED3]/30 border-l-transparent rounded-full animate-spin" />
-               <div className="absolute top-0 w-24 h-24 border-4 border-t-transparent border-r-[#7DB7F0] border-b-transparent border-l-[#7DB7F0]/30 rounded-full animate-[spin_1.5s_linear_reverse_infinite]" />
-               <div className="mt-8 text-xs font-bold tracking-[0.3em] text-[#0A6ED3] uppercase animate-pulse">
-                 Synchronizing
+               <div className="w-16 h-16 border-[0.5px] border-white/20 rounded-full flex items-center justify-center">
+                 <div className="w-12 h-12 border-t border-primary rounded-full animate-spin" />
+               </div>
+               <div className="mt-6 font-mono text-[10px] tracking-[0.4em] text-muted uppercase">
+                 Resynchronizing
                </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Navbar (Cosmos Glassmorphism) */}
-      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto" aria-label="Primary navigation">
-        <div className="glass px-5 py-3 rounded-full border border-white/10 bg-white/5 backdrop-blur-xl flex items-center gap-5 shadow-2xl sm:px-8 sm:gap-8">
+      {/* Navbar (Minimalist Tech) */}
+      <nav className="fixed top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-auto" aria-label="Primary navigation">
+        <div className="glass px-6 py-2.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-2xl flex items-center gap-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <a
             href="/"
             onClick={handleHomeClick}
-            className="text-xs uppercase tracking-widest font-bold text-white hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0A6ED3] transition-colors cursor-pointer"
+            className="text-[10px] uppercase tracking-[0.25em] font-bold text-white hover:text-primary transition-colors cursor-pointer"
           >
-            Home
+            Index
           </a>
+          <div className="w-px h-3 bg-white/10" />
           <a
             href="#culture"
-            className="text-xs uppercase tracking-widest text-gray-400 hover:text-white focus-visible:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0A6ED3] transition-colors cursor-pointer"
+            className="text-[10px] uppercase tracking-[0.25em] text-muted hover:text-white transition-colors cursor-pointer"
           >
-            Timeline
+            Archive
           </a>
         </div>
       </nav>

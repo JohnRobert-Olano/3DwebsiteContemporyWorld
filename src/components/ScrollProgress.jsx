@@ -37,10 +37,10 @@ export default function ScrollProgress() {
       aria-hidden="true"
     >
       <div
-        className="h-full origin-left bg-[#0A6ED3]"
+        className="h-full origin-left bg-primary"
         style={{
           transform: `scaleX(${progress})`,
-          boxShadow: '0 0 8px rgba(10, 110, 211, 0.7)',
+          boxShadow: '0 0 12px var(--color-primary)',
           willChange: 'transform',
         }}
       />

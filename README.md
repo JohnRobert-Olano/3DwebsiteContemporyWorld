@@ -122,12 +122,14 @@ Requires Node 18+ and two API credentials (see below).
 
 ## Environment Variables
 
-Create a `.env.local` file in the project root (auto-gitignored by the `.env*` / `*.local` rules):
+Create a `.env.local` file in the project root. You can copy `.env.example`; `.env.local` is auto-gitignored by the `*.local` rule.
 
 ```env
 VITE_GOOGLE_MAPS_API_KEY=AIza...
 VITE_CESIUM_ION_TOKEN=eyJh...
 ```
+
+For Vercel, add these as separate Project Settings -> Environment Variables for Production, Preview, and Development as needed. Do not paste the whole `.env.local` file as one value.
 
 If either is missing, a setup-error banner is shown in the UI and the globe will not load.
 
@@ -379,6 +381,8 @@ CesiumEarth and Content communicate exclusively through shared `window` properti
 | `window.destinationTourState` | `{index, progress, requestedAt}` | Content | CesiumEarth | Which destination and how far in |
 | `window.globeTargetDirection` | `-1 \| 0 \| 1` | Content | CesiumEarth | Which side of screen the card is on |
 | `window.codexLenis` | `Lenis` | App | Content | Shared Lenis instance for smooth scrollTo |
+| `window.projectsFinaleActive` | `boolean` | ProjectsFinale | Content (snap bypass) | Is the Projects Finale ScrollTrigger pinned and scrubbing? |
+| `window.projectsScrollProgress` | `0–1` | ProjectsFinale | (reserved) | Normalized scroll progress through the Projects Finale scrub |
 
 ---
 
