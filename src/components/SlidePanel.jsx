@@ -13,13 +13,13 @@ export default function SlidePanel({ open, onClose, slide }) {
           className="fixed right-4 top-24 z-40 w-[min(92vw,28rem)] max-h-[calc(100vh-8rem)] overflow-auto pointer-events-auto sm:right-6 lg:right-10"
           aria-labelledby="slide-panel-title"
         >
-          <article className="rounded-lg border border-[#0A6ED3]/30 bg-black/70 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
-            <header className="mb-4 flex items-start justify-between gap-4 sm:mb-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-md border border-[#0A6ED3]/50 bg-[#0A6ED3]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+          <article className="tech-border bg-black/60 p-6 shadow-[0_12px_48px_rgba(0,0,0,0.6)] backdrop-blur-2xl sm:p-8">
+            <header className="mb-6 flex items-start justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-primary">
                   {slide.tag}
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted">
                   {slide.subTitle}
                 </span>
               </div>
@@ -27,44 +27,33 @@ export default function SlidePanel({ open, onClose, slide }) {
                 type="button"
                 onClick={onClose}
                 aria-label="Close slide"
-                className="shrink-0 cursor-pointer rounded-full p-1.5 text-gray-400 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED3]"
+                className="shrink-0 cursor-pointer rounded border border-white/5 p-1.5 text-muted transition-all duration-200 hover:bg-white/10 hover:text-white"
               >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </header>
 
             <h2
               id="slide-panel-title"
-              className="font-sans text-3xl font-bold uppercase leading-none tracking-normal text-white drop-shadow-lg sm:text-4xl"
+              className="font-display text-4xl font-black uppercase leading-[0.9] tracking-tighter text-white sm:text-5xl"
             >
               {slide.title}
             </h2>
 
-            <p className="mt-4 max-w-prose break-words text-sm leading-6 text-gray-200 drop-shadow-sm sm:mt-5 sm:text-base sm:leading-7">
+            <p className="mt-6 max-w-prose text-sm leading-relaxed text-gray-300 sm:text-base">
               {slide.summary}
             </p>
 
             {slide.points?.length > 0 && (
-              <div className="mt-6 grid gap-4 border-t border-white/10 pt-5 sm:mt-7 sm:grid-cols-2 sm:gap-5 sm:pt-6">
+              <div className="mt-8 grid gap-6 border-t border-white/5 pt-6 sm:grid-cols-2 sm:gap-8">
                 {slide.points.map((point) => (
-                  <div key={point.label}>
-                    <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[#7DB7F0]">
+                  <div key={point.label} className="border-l border-primary/30 pl-4">
+                    <h3 className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted">
                       {point.label}
                     </h3>
-                    <p className="mt-2 break-words text-sm leading-6 text-gray-300">
+                    <p className="mt-2 text-sm leading-relaxed text-gray-400">
                       {point.text}
                     </p>
                   </div>
@@ -73,11 +62,14 @@ export default function SlidePanel({ open, onClose, slide }) {
             )}
 
             {slide.example && (
-              <div className="mt-5 border-t border-white/10 pt-4 sm:mt-6 sm:pt-5">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
-                  In practice
-                </h3>
-                <p className="mt-2 break-words text-sm leading-6 text-gray-300">
+              <div className="mt-8 border-t border-white/5 pt-6">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="w-1 h-1 bg-primary rounded-full" />
+                   <h3 className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted">
+                     Context
+                   </h3>
+                </div>
+                <p className="text-sm italic leading-relaxed text-gray-400">
                   {slide.example}
                 </p>
               </div>

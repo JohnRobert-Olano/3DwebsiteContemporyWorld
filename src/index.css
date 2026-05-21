@@ -1,32 +1,56 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #0A6ED3;
-  --color-secondary: #054E98;
-  --color-dark: #000000;
-  --color-darker: #000010;
-  --font-sans: 'General Sans', sans-serif;
-  --font-serif: 'Gambetta', serif;
+  --color-primary: oklch(60% 0.25 290); /* Electric Violet */
+  --color-secondary: oklch(40% 0.2 290);
+  --color-bg: oklch(12% 0.015 250);
+  --color-surface: oklch(18% 0.02 250);
+  --color-border: oklch(25% 0.02 250);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+
+:root {
+  --bg: oklch(12% 0.015 250);
+  --surface: oklch(18% 0.02 250);
+  --fg: oklch(98% 0.005 250);
+  --muted: oklch(60% 0.015 250);
+  --border: oklch(25% 0.02 250);
+  --accent: oklch(60% 0.25 290);
+  
+  --font-display: var(--font-sans);
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background: linear-gradient(to bottom, var(--color-dark), var(--color-darker));
-  color: #FFFFFF;
-  font-family: var(--font-serif);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4, h5, h6, .font-sans {
-  font-family: var(--font-sans);
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .glass {
-  background: rgba(10, 110, 211, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(10, 110, 211, 0.2);
+  background: oklch(100% 0 0 / 3%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid oklch(100% 0 0 / 8%);
+}
+
+.tech-border {
+  border: 0.5px solid var(--border);
 }
 
 /* Hide the default Cesium watermark/logo; Google attribution still shows via
@@ -36,8 +60,8 @@ h1, h2, h3, h4, h5, h6, .font-sans {
 
 .destination-map-marker {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   pointer-events: none;
   transition: opacity 180ms ease;
   will-change: opacity;
@@ -53,52 +77,54 @@ h1, h2, h3, h4, h5, h6, .font-sans {
 }
 
 .destination-map-marker__core {
-  width: 10px;
-  height: 10px;
-  background: #F97316;
-  border: 2px solid #FFFFFF;
-  box-shadow: 0 0 18px rgba(249, 115, 22, 0.95);
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border: 1.5px solid #FFFFFF;
+  box-shadow: 0 0 12px var(--accent);
 }
 
 .destination-map-marker__pulse {
-  width: 28px;
-  height: 28px;
-  border: 1px solid rgba(249, 115, 22, 0.82);
-  animation: destination-marker-pulse 1.4s ease-out infinite;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--accent);
+  opacity: 0.6;
+  animation: destination-marker-pulse 2s ease-out infinite;
 }
 
 .destination-card {
   scrollbar-width: thin;
-  scrollbar-color: rgba(125, 183, 240, 0.45) rgba(255, 255, 255, 0.06);
+  scrollbar-color: var(--accent) transparent;
 }
 
 .destination-card::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 
 .destination-card::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.06);
+  background: transparent;
 }
 
 .destination-card::-webkit-scrollbar-thumb {
-  background: rgba(125, 183, 240, 0.45);
+  background: var(--accent);
+  opacity: 0.5;
   border-radius: 9999px;
 }
 
 @keyframes destination-marker-pulse {
   0% {
-    opacity: 0.88;
-    transform: translate(-50%, -50%) scale(0.45);
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0.5);
   }
 
   70% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.6);
+    transform: translate(-50%, -50%) scale(2);
   }
 
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.6);
+    transform: translate(-50%, -50%) scale(2);
   }
 }
 
@@ -108,27 +134,54 @@ h1, h2, h3, h4, h5, h6, .font-sans {
   }
 }
 
-@keyframes colosseum-float {
-  0%, 100% {
-    transform: translateY(-6px);
-  }
-  50% {
-    transform: translateY(6px);
+/* Outlined era-range text shown on each landmark title card. Times-style
+   serif outline matches the Google Earth Studio reference. The theme has no
+   --font-serif variable, so the family is declared explicitly here. */
+.landmark-era {
+  font-family: 'Times New Roman', Times, Georgia, serif;
+  font-weight: 500;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.95);
+  text-stroke: 1.5px rgba(255, 255, 255, 0.95);
+  paint-order: stroke;
+  text-align: center;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: visible;
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.6));
+}
+
+@media (max-width: 768px) {
+  .landmark-era {
+    -webkit-text-stroke-width: 1px;
+    text-stroke-width: 1px;
+    white-space: normal;
   }
 }
 
-.colosseum-float {
-  animation: colosseum-float 5s ease-in-out infinite;
-  will-change: transform;
-}
-
-.colosseum-float--delayed {
-  animation-delay: -2.2s;
+/* ── Projects Finale standalone-page treatment ───────────────
+   While the ProjectsFinale ScrollTrigger is pinned, hide the
+   page chrome (App navbar, journey nav, mobile nav, MapHud
+   telemeter) so the section reads as a discrete closing page,
+   not an overlay on top of the globe / landmarks experience. */
+body.in-projects-finale nav[aria-label="Primary navigation"],
+body.in-projects-finale nav[aria-label="Destination index"],
+body.in-projects-finale nav[aria-label="Mobile section navigation"],
+body.in-projects-finale button[aria-label="Open destination index"],
+body.in-projects-finale [aria-hidden="true"].fixed.left-4.top-4,
+body.in-projects-finale > div[aria-hidden="true"].fixed.top-4.left-4 {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .colosseum-float,
-  .colosseum-float--delayed {
-    animation: none;
+  body.in-projects-finale nav[aria-label="Primary navigation"],
+  body.in-projects-finale nav[aria-label="Destination index"],
+  body.in-projects-finale nav[aria-label="Mobile section navigation"],
+  body.in-projects-finale button[aria-label="Open destination index"],
+  body.in-projects-finale [aria-hidden="true"].fixed.left-4.top-4,
+  body.in-projects-finale > div[aria-hidden="true"].fixed.top-4.left-4 {
+    transition: none;
   }
 }

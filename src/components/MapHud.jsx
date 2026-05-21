@@ -83,30 +83,30 @@ export default function MapHud({ map }) {
 
   return (
     <div
-      className="pointer-events-none fixed left-3 top-3 z-50 select-none rounded-md border border-white/10 bg-black/55 px-3 py-2 font-mono text-[11px] leading-tight text-white/85 shadow-lg backdrop-blur-md"
+      className="pointer-events-none fixed left-4 top-4 z-50 select-none tech-border bg-black/40 px-3 py-2 font-mono text-[9px] leading-tight text-white/90 shadow-2xl backdrop-blur-xl"
       style={{ fontVariantNumeric: 'tabular-nums' }}
       aria-hidden="true"
     >
-      <div className="mb-1 text-[9px] uppercase tracking-[0.18em] text-white/45">
-        Camera HUD
+      <div className="mb-2 border-b border-white/5 pb-1 text-[8px] uppercase tracking-[0.3em] text-primary font-bold">
+        Telemeter // Access
       </div>
-      <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
-        <span className="text-white/45">Longitude</span>
+      <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1">
+        <span className="text-muted">LNG</span>
         <span>{formatNumber(stats.lng, 5)}</span>
 
-        <span className="text-white/45">Latitude</span>
+        <span className="text-muted">LAT</span>
         <span>{formatNumber(stats.lat, 5)}</span>
 
-        <span className="text-white/45">Zoom</span>
+        <span className="text-muted">ZOM</span>
         <span>{formatNumber(stats.zoom, 2)}</span>
 
-        <span className="text-white/45">Pitch</span>
+        <span className="text-muted">PIT</span>
         <span>{formatNumber(stats.pitch, 1)}°</span>
 
-        <span className="text-white/45">Bearing</span>
+        <span className="text-muted">BRG</span>
         <span>{formatNumber(stats.bearing, 1)}°</span>
 
-        <span className="text-white/45">Altitude</span>
+        <span className="text-muted">ALT</span>
         <span>{formatAltitude(stats.altitude, stats.zoom)}</span>
       </div>
     </div>

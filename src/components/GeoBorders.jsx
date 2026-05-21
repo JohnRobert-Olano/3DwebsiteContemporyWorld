@@ -56,7 +56,7 @@ export default function GeoBorders({ radius = 2.01 }) {
 
   return (
     <lineSegments geometry={linesGeometry}>
-      <lineBasicMaterial color="#0A6ED3" transparent opacity={0.8} depthWrite={false} />
+      <lineBasicMaterial color={new THREE.Color("oklch(60% 0.25 290)")} transparent opacity={0.4} depthWrite={false} />
     </lineSegments>
   );
 }

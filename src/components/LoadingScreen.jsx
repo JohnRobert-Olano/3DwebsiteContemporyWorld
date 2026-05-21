@@ -3,10 +3,11 @@ import { Loader } from '@react-three/drei';
 export default function LoadingScreen() {
   return (
     <Loader
-      containerStyles={{ backgroundColor: 'var(--color-dark)' }}
-      innerStyles={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', width: '300px' }}
-      barStyles={{ backgroundColor: 'var(--color-primary)', height: '4px' }}
-      dataStyles={{ color: 'var(--color-primary)', fontFamily: 'var(--font-mono)' }}
+      containerStyles={{ backgroundColor: 'var(--bg)' }}
+      innerStyles={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', width: '300px', height: '2px' }}
+      barStyles={{ backgroundColor: 'var(--accent)', height: '2px' }}
+      dataStyles={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px' }}
+      dataInterpolation={(p) => `Syncing // ${p.toFixed(0)}%`}
     />
   );
 }

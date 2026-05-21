@@ -13,8 +13,8 @@ import {
 } from '../lib/cesium/cameraController';
 
 const ROME_SLIDE = {
-  tag: 'Slide 01',
-  subTitle: 'Destination - Rome',
+  tag: '01 // ARCHIVE',
+  subTitle: 'Segment // Rome',
   title: 'Colosseum',
   summary:
     'Ancient Roman amphitheater, the largest ever built. It anchors the transition from the Rome descent into the global destination journey.',
@@ -250,6 +250,7 @@ function buildEarthIdleDriver() {
 
 export default function CesiumEarth() {
   const containerRef = useRef(null);
+  const containerOuterRef = useRef(null);
   const viewerRef = useRef(null);
   const [setupError, setSetupError] = useState('');
   const [showRomeSlide, setShowRomeSlide] = useState(false);
@@ -266,9 +267,9 @@ export default function CesiumEarth() {
   const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
 
   const initialSetupError = !googleApiKey
-    ? 'Missing VITE_GOOGLE_MAPS_API_KEY in .env.local'
+    ? 'Missing VITE_GOOGLE_MAPS_API_KEY in the local or Vercel environment'
     : !ionToken
-      ? 'Missing VITE_CESIUM_ION_TOKEN in .env.local'
+      ? 'Missing VITE_CESIUM_ION_TOKEN in the local or Vercel environment'
       : setupError;
 
   useEffect(() => {
@@ -654,9 +655,54 @@ export default function CesiumEarth() {
     };
   }, [googleApiKey, ionToken]);
 
+  /* ── Lateral globe shift ──────────────────────────────────────
+     Cesium has no Mapbox-style camera padding. To position the
+     visible globe on the left/right of the viewport during the
+     ping-pong sections, translate the outer container via CSS.
+     The camera logic (tilt/zoom/longitude nudge) is untouched —
+     this only shifts the rendered output.
+     Suppressed during Rome descent and destination tour so those
+     framings remain centered on their targets. */
+  useEffect(() => {
+    const container = containerOuterRef.current;
+    if (!container) return undefined;
+
+    const reducedMotion =
+      typeof window !== 'undefined'
+      && window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const SHIFT_VW = 28;
+    container.style.transition = reducedMotion
+      ? 'none'
+      : 'transform 1.2s cubic-bezier(0.22, 1, 0.36, 1)';
+
+    let lastDir = 0;
+    let rafId = 0;
+    const tick = () => {
+      const targetCentered =
+        window.destinationTourActive
+        || window.romeModeActive
+        || window.projectsFinaleActive;
+      const dir = targetCentered ? 0 : (window.globeTargetDirection || 0);
+      if (dir !== lastDir) {
+        lastDir = dir;
+        container.style.transform = `translateX(${dir * SHIFT_VW}vw)`;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      container.style.transition = '';
+      container.style.transform = '';
+    };
+  }, []);
+
   return (
     <>
-      <div className="fixed inset-0 z-0" data-lenis-prevent>
+      <div ref={containerOuterRef} className="fixed inset-0 z-0 will-change-transform" data-lenis-prevent>
         <div ref={containerRef} className="h-full w-full" data-lenis-prevent />
       </div>
 
