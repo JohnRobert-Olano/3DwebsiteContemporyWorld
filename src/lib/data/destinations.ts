@@ -5,8 +5,8 @@ export const destinations = [
     location: 'Rome, Italy',
     built: '70-80 AD',
     eraRange: '264 BC – 476 AD',
-    lat: 41.89091,
-    lon: 12.49222,
+    lat: 41.89104,
+    lon: 12.49221,
     about:
       'Ancient Roman amphitheater, the largest ever built. Iconic symbol of Imperial Rome and Roman engineering.',
     significance: 'Imperial spectacle and Roman engineering',

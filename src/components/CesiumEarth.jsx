@@ -27,7 +27,7 @@ const ROME_SLIDE = {
 };
 
 const ROME = [12.4964, 41.9028];
-const COLOSSEUM = { center: [12.49222, 41.89091] };
+const COLOSSEUM = { center: [12.49221, 41.89104] };
 const EARTH_IDLE_CENTER = [12.4922, 22];
 const EARTH_ROTATION_DEGREES_PER_SECOND = 1.45;
 const EARTH_MOTION_EASE = 0.012;
@@ -42,14 +42,14 @@ const ROME_KEYFRAMES = {
   },
   city: {
     mid: { center: ROME, zoom: 5.5, pitch: 38, bearing: -16 },
-    end: { center: COLOSSEUM.center, zoom: 17.6, pitch: 70, bearing: -15.2 },
+    end: { center: COLOSSEUM.center, zoom: 17.82, pitch: 59.9, bearing: 352.2 },
   },
 };
 
 // Per-destination camera framing. Mapbox-shaped (zoom/pitch/bearing) for parity
 // with the original tuning comments; converted on use.
 const DESTINATION_VIEW_OVERRIDES = {
-  'colosseum': { zoom: 17.6, pitch: 70, bearing: -15.2 },
+  'colosseum': { zoom: 17.82, pitch: 59.9, bearing: 352.2 },
   'saint-peters-basilica': { zoom: 17.5, pitch: 80.1, bearing: -51.6 },
   // Xi'an falls in Google's photogrammetry coverage gap (no 3D mesh for any
   // Chinese city). At ground level the wall reads as flat satellite imagery,
@@ -101,7 +101,7 @@ function applyRomeScrollState(viewer, progress, codex) {
   if (codex.userInteracting) return;
   const idleAlt = codex.elevations.get('EARTH_IDLE') ?? 0;
   const romeAlt = codex.elevations.get('ROME') ?? 20;
-  const colossAlt = codex.elevations.get('colosseum') ?? 30;
+  const colossAlt = DESTINATION_VIEW_OVERRIDES['colosseum']?.altitude ?? codex.elevations.get('colosseum') ?? 30;
   let pose;
   if (progress < 0.5) {
     const t = easeInOutCubic(progress / 0.5);
@@ -118,8 +118,8 @@ function applyRomeReducedMotionState(viewer, progress, codex) {
   if (codex.userInteracting) return;
   const pose = progress >= 0.5
     ? poseFromMapbox(
-      { center: COLOSSEUM.center, zoom: 17.6, pitch: 70, bearing: -15.2 },
-      codex.elevations.get('colosseum') ?? 30,
+      { center: COLOSSEUM.center, zoom: 17.82, pitch: 59.9, bearing: 352.2 },
+      DESTINATION_VIEW_OVERRIDES['colosseum']?.altitude ?? codex.elevations.get('colosseum') ?? 30,
     )
     : poseFromMapbox(
       { center: EARTH_IDLE_CENTER, zoom: 1.35, pitch: 0, bearing: 0 },
@@ -147,7 +147,7 @@ function applyDestinationTourState(viewer, tourState, codex) {
 
   const reducedMotion = prefersReducedMotion();
   const camera = getDestinationCamera(destination);
-  const altitude = codex.elevations.get(destination.id) ?? 100;
+  const altitude = camera.altitude ?? codex.elevations.get(destination.id) ?? 100;
   const pose = poseFromMapbox({
     center: destinationToLngLat(destination),
     zoom: camera.zoom,

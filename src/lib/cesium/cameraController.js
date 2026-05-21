@@ -18,12 +18,8 @@ import { zoomToHeight, heightToZoom, mapboxPitchToCesiumDeg } from './zoomToHeig
 // Conversion from Mapbox:
 //   range     = zoomToHeight(zoom)
 //   pitchDeg  = mapboxPitch - 90        (Mapbox 0 = top-down → Cesium HPR -90)
-//   headingDeg = mapboxBearing + 180    (Mapbox bearing = look direction;
-//                                        Cesium HPR heading = camera position)
-//
-// The +180 heading offset is the easy one to miss — Mapbox bearing 0 means the
-// camera LOOKS north, which puts the CAMERA south of the target. Cesium HPR
-// heading 0 places the CAMERA north of the target. Off by 180°.
+//   headingDeg = mapboxBearing          (Mapbox bearing = look direction;
+//                                        Cesium HPR heading = look direction)
 
 export function poseFromMapbox({ center, zoom, pitch, bearing }, altitudeMeters = 100) {
   return {
@@ -36,7 +32,7 @@ export function poseFromMapbox({ center, zoom, pitch, bearing }, altitudeMeters 
     // inside the terrain mesh.
     altitude: altitudeMeters,
     range: zoomToHeight(zoom),
-    headingDeg: ((bearing + 180) % 360 + 360) % 360,
+    headingDeg: (bearing % 360 + 360) % 360,
     pitchDeg: mapboxPitchToCesiumDeg(pitch),
   };
 }
@@ -201,20 +197,34 @@ export function lerpMapboxPoses(start, end, t, startAlt = 100, endAlt = startAlt
   );
 }
 
-// Snapshot the current camera as a Mapbox-shaped pose for the HUD readout. The
-// "center" returned here is the camera's own ground-projected position, not
-// the target it's looking at — there is no robust way to recover the latter
-// after the user has gestured. Good enough for a debug overlay.
 export function readCameraAsMapboxPose(viewer) {
-  const cart = viewer.camera.positionCartographic;
+  const windowPosition = new Cesium.Cartesian2(
+    viewer.canvas.clientWidth / 2,
+    viewer.canvas.clientHeight / 2
+  );
+  
+  const pickCartesian = viewer.camera.pickEllipsoid(windowPosition, viewer.scene.globe.ellipsoid);
+  const camCart = viewer.camera.positionCartographic;
+  
+  let centerLon = Cesium.Math.toDegrees(camCart.longitude);
+  let centerLat = Cesium.Math.toDegrees(camCart.latitude);
+  let range = camCart.height;
+  
+  if (pickCartesian) {
+    const targetCart = Cesium.Cartographic.fromCartesian(pickCartesian);
+    centerLon = Cesium.Math.toDegrees(targetCart.longitude);
+    centerLat = Cesium.Math.toDegrees(targetCart.latitude);
+    range = Cesium.Cartesian3.distance(viewer.camera.positionWC, pickCartesian);
+  }
+
   return {
-    center: [Cesium.Math.toDegrees(cart.longitude), Cesium.Math.toDegrees(cart.latitude)],
-    zoom: heightToZoom(cart.height),
+    center: [centerLon, centerLat],
+    zoom: heightToZoom(range),
     pitch: Cesium.Math.toDegrees(viewer.camera.pitch) + 90,
     // Camera.heading is the camera's look direction; convert back to Mapbox
     // bearing convention (look direction, not camera-from-target).
     bearing: Cesium.Math.toDegrees(viewer.camera.heading),
-    altitude: cart.height,
+    altitude: camCart.height,
   };
 }
 
