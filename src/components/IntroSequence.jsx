@@ -17,6 +17,21 @@ const SPIN_END_DEG = 0;
 const LETTER_ANGLE_DEG = 22;
 const RADIUS = 500;
 
+const STAR_COORDS = [
+  { top: '12%', left: '18%', delay: 0.2 },
+  { top: '45%', left: '85%', delay: 1.1 },
+  { top: '78%', left: '14%', delay: 0.5 },
+  { top: '32%', left: '56%', delay: 1.8 },
+  { top: '88%', left: '41%', delay: 0.9 },
+  { top: '22%', left: '74%', delay: 1.4 },
+  { top: '63%', left: '31%', delay: 0.3 },
+  { top: '15%', left: '92%', delay: 1.7 },
+  { top: '51%', left: '69%', delay: 0.7 },
+  { top: '91%', left: '83%', delay: 1.2 },
+  { top: '37%', left: '21%', delay: 0.6 },
+  { top: '74%', left: '58%', delay: 1.5 },
+];
+
 const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -171,19 +186,19 @@ export default function IntroSequence({ onComplete }) {
       {/* Minimal Starfield */}
       {!cfg.isStatic && (
         <div className="absolute inset-0">
-          {[...Array(12)].map((_, i) => (
+          {STAR_COORDS.map((star, i) => (
             <motion.div
               key={i}
               className="absolute h-[1.5px] w-[1.5px] rounded-full bg-white shadow-[0_0_8px_white]"
               style={{
-                top: `${Math.random() * 100}%`,
-                left: `${Math.random() * 100}%`,
+                top: star.top,
+                left: star.left,
               }}
               animate={{ opacity: [0, 1, 0] }}
               transition={{
                 duration: 2,
                 repeat: Infinity,
-                delay: Math.random() * 2,
+                delay: star.delay,
               }}
             />
           ))}

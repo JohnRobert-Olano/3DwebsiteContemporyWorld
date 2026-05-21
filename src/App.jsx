@@ -1,7 +1,8 @@
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Lenis from 'lenis';
-import CesiumEarth from './components/CesiumEarth';
+
+const CesiumEarth = lazy(() => import('./components/CesiumEarth'));
 import Content from './components/Content';
 import LoadingScreen from './components/LoadingScreen';
 import IntroSequence from './components/IntroSequence';
