@@ -57,13 +57,13 @@ const DESTINATION_VIEW_OVERRIDES = {
   // rectangular fortification + moat is unmistakable from this altitude.
   'xian-city-wall': { zoom: 14, pitch: 45, bearing: 0 },
   'royal-palace-madrid': { zoom: 15.87, pitch: 73.9, bearing: 334.6, altitude: 0 },
-  'neuschwanstein-castle': { zoom: 18.3, pitch: 79.7, bearing: -84.3 },
-  'buckingham-palace': { zoom: 18.0, pitch: 73.5, bearing: -97.2 },
-  'big-ben': { zoom: 17.4, pitch: 76.5, bearing: -146.4 },
-  'statue-of-liberty': { zoom: 17.4, pitch: 73.5, bearing: -33.6 },
-  'white-house': { zoom: 17.4, pitch: 68.5, bearing: -179.9 },
-  'world-trade-center-nyc': { zoom: 15.8, pitch: 61.3, bearing: 45.9 },
-  'san-salvador-island': { zoom: 12.0, pitch: 54.5, bearing: -31.0 },
+  'neuschwanstein-castle': { zoom: 15.57, pitch: 72.3, bearing: 278.7, altitude: 0 },
+  'buckingham-palace': { zoom: 18.12, pitch: 70.4, bearing: 261.1, altitude: 0 },
+  'big-ben': { zoom: 17.59, pitch: 76.5, bearing: 213.6, altitude: 0 },
+  'statue-of-liberty': { zoom: 18.59, pitch: 66.6, bearing: 354.0, altitude: 0 },
+  'white-house': { zoom: 17.73, pitch: 73.2, bearing: 180.1, altitude: 0 },
+  'world-trade-center-nyc': { zoom: 16.37, pitch: 61.6, bearing: 54.7, altitude: 0 },
+  'san-salvador-island': { zoom: 11.38, pitch: 46.6, bearing: 334.8, altitude: 0 },
   // Original Mapbox pitch was 85 (near-horizon). At Cesium height 280 m this
   // would clip the camera into terrain — pulled back to pitch 75 / zoom 17.5
   // to keep the photogrammetry in frame. Re-tune in dev if needed.
