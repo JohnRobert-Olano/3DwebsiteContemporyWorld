@@ -61,12 +61,9 @@ export function setCameraPose(viewer, pose) {
 
 // Animated flight — used for landmark-to-landmark transitions. Uses
 // flyToBoundingSphere with an HPR offset, which is the Cesium-idiomatic way
-// to fly to a target with a specific viewing angle.
-//
-// Prefer panToPose for the destination tour: flyToBoundingSphere arcs the
-// camera through space and can feel like a jump cut when start/end views
-// have very different orientations. panToPose does a true frame-by-frame
-// lerp of all six pose components with ease-in-out timing.
+// to fly to a target with a specific viewing angle. Landmark tour transitions
+// use zoomThroughEarthLayers() below so they read as Earth-scale depth changes
+// instead of lateral flyovers.
 export function flyToPose(viewer, pose, { durationSec = 2.2, easingFunction, complete, cancel } = {}) {
   if (!viewer || viewer.isDestroyed?.()) return;
   const boundingSphere = new Cesium.BoundingSphere(targetFromPose(pose), 1);
@@ -94,6 +91,7 @@ const easeInOutCubic = (t) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 const lerp1 = (a, b, t) => a + (b - a) * t;
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
 // Shortest-path angular interpolation. Handles wrap-around at 360°/-180° so
 // the camera doesn't take the long way around when heading changes from
@@ -102,6 +100,53 @@ const lerpAngle = (a, b, t) => {
   const diff = ((b - a + 540) % 360) - 180;
   return a + diff * t;
 };
+
+const DEG_TO_RAD = Math.PI / 180;
+const RAD_TO_DEG = 180 / Math.PI;
+
+// Great-circle (spherical) interpolation between two geodetic points.
+// Returns [lat, lon] in degrees at parameter t ∈ [0, 1]. This is the true
+// shortest path on the sphere — linear lat/lon lerp can wander hundreds of
+// kilometers off the geodesic on intercontinental hops, which reads as
+// "the camera went around the globe" even though lerpAngle already picked
+// the correct direction.
+function slerpLatLon(lat1, lon1, lat2, lon2, t) {
+  const phi1 = lat1 * DEG_TO_RAD;
+  const phi2 = lat2 * DEG_TO_RAD;
+  const lam1 = lon1 * DEG_TO_RAD;
+  const lam2 = lon2 * DEG_TO_RAD;
+
+  const cosPhi1 = Math.cos(phi1);
+  const cosPhi2 = Math.cos(phi2);
+
+  const x1 = cosPhi1 * Math.cos(lam1);
+  const y1 = cosPhi1 * Math.sin(lam1);
+  const z1 = Math.sin(phi1);
+  const x2 = cosPhi2 * Math.cos(lam2);
+  const y2 = cosPhi2 * Math.sin(lam2);
+  const z2 = Math.sin(phi2);
+
+  const dot = Math.max(-1, Math.min(1, x1 * x2 + y1 * y2 + z1 * z2));
+  const omega = Math.acos(dot);
+
+  // Degenerate: same point (or numerically indistinguishable) — fall back to
+  // straight lerp so we don't divide by sin(0).
+  if (omega < 1e-9) {
+    return [lerp1(lat1, lat2, t), lerpAngle(lon1, lon2, t)];
+  }
+
+  const sinOmega = Math.sin(omega);
+  const a = Math.sin((1 - t) * omega) / sinOmega;
+  const b = Math.sin(t * omega) / sinOmega;
+
+  const x = a * x1 + b * x2;
+  const y = a * y1 + b * y2;
+  const z = a * z1 + b * z2;
+
+  const lat = Math.atan2(z, Math.sqrt(x * x + y * y)) * RAD_TO_DEG;
+  const lon = Math.atan2(y, x) * RAD_TO_DEG;
+  return [lat, lon];
+}
 
 function haversineMeters(lat1, lon1, lat2, lon2) {
   const R = 6_371_000;
@@ -153,10 +198,17 @@ export function panToPose(viewer, startPose, endPose, opts = {}) {
     const t = Math.min(1, elapsed / durationSec);
     const eased = easing(t);
     const arcBoost = Math.sin(eased * Math.PI) * arcRangeM;
+    const [lat, lon] = slerpLatLon(
+      startPose.lat,
+      startPose.lon,
+      endPose.lat,
+      endPose.lon,
+      eased,
+    );
 
     const pose = {
-      lon: lerpAngle(startPose.lon, endPose.lon, eased),
-      lat: lerp1(startPose.lat, endPose.lat, eased),
+      lon,
+      lat,
       altitude: lerp1(startPose.altitude ?? 0, endPose.altitude ?? 0, eased),
       range: lerp1(startPose.range, endPose.range, eased) + arcBoost,
       headingDeg: lerpAngle(startPose.headingDeg, endPose.headingDeg, eased),
@@ -167,6 +219,118 @@ export function panToPose(viewer, startPose, endPose, opts = {}) {
     if (t < 1) {
       rafId = requestAnimationFrame(tick);
     } else {
+      finished = true;
+      opts.complete?.();
+    }
+  };
+
+  rafId = requestAnimationFrame(tick);
+
+  return () => {
+    if (finished) return;
+    canceled = true;
+    if (rafId) cancelAnimationFrame(rafId);
+  };
+}
+
+function interpolatePose(startPose, endPose, t) {
+  const [lat, lon] = slerpLatLon(
+    startPose.lat,
+    startPose.lon,
+    endPose.lat,
+    endPose.lon,
+    t,
+  );
+
+  return {
+    lon,
+    lat,
+    altitude: lerp1(startPose.altitude ?? 0, endPose.altitude ?? 0, t),
+    range: lerp1(startPose.range, endPose.range, t),
+    headingDeg: lerpAngle(startPose.headingDeg, endPose.headingDeg, t),
+    pitchDeg: lerp1(startPose.pitchDeg, endPose.pitchDeg, t),
+  };
+}
+
+// Staged landmark transition: pull out to Earth scale, reframe at a regional
+// altitude, then zoom into the existing tuned local landmark pose. This keeps
+// the visual language as depth-through-layers instead of a lateral surface pan.
+export function zoomThroughEarthLayers(viewer, startPose, endPose, opts = {}) {
+  if (!viewer || viewer.isDestroyed?.()) return () => {};
+
+  const distM = haversineMeters(startPose.lat, startPose.lon, endPose.lat, endPose.lon);
+  const durationSec = opts.durationSec
+    ?? Math.min(4.2, Math.max(3.0, 3.0 + distM / 9_000_000));
+  const isInteracting = opts.isInteracting ?? (() => false);
+  const easing = opts.easing ?? easeInOutCubic;
+
+  const globalRange = opts.globalRangeM
+    ?? Math.min(35_000_000, Math.max(zoomToHeight(1.18), startPose.range * 1.08));
+  const regionalRange = opts.regionalRangeM
+    ?? Math.max(zoomToHeight(5.35), endPose.range * 22);
+
+  const globalPose = {
+    lon: startPose.lon,
+    lat: startPose.lat,
+    altitude: startPose.altitude ?? 0,
+    range: globalRange,
+    headingDeg: startPose.headingDeg,
+    pitchDeg: -88,
+  };
+
+  const regionalPose = {
+    lon: endPose.lon,
+    lat: endPose.lat,
+    altitude: endPose.altitude ?? 0,
+    range: regionalRange,
+    headingDeg: lerpAngle(startPose.headingDeg, endPose.headingDeg, 0.55),
+    pitchDeg: -58,
+  };
+
+  const stages = [
+    { endAt: 0.34, from: startPose, to: globalPose },
+    { endAt: 0.67, from: globalPose, to: regionalPose },
+    { endAt: 1, from: regionalPose, to: endPose },
+  ];
+
+  const startTime = performance.now();
+  let rafId = 0;
+  let canceled = false;
+  let finished = false;
+
+  const tick = () => {
+    if (viewer.isDestroyed?.() || canceled) {
+      if (!finished) opts.cancel?.();
+      return;
+    }
+    if (isInteracting()) {
+      canceled = true;
+      opts.cancel?.();
+      return;
+    }
+
+    const elapsed = (performance.now() - startTime) / 1000;
+    const overallT = clamp01(elapsed / durationSec);
+    let previousEnd = 0;
+    let activeStage = stages[stages.length - 1];
+
+    for (const stage of stages) {
+      if (overallT <= stage.endAt) {
+        activeStage = stage;
+        break;
+      }
+      previousEnd = stage.endAt;
+    }
+
+    const stageSpan = activeStage.endAt - previousEnd;
+    const stageT = stageSpan > 0 ? clamp01((overallT - previousEnd) / stageSpan) : 1;
+    const pose = interpolatePose(activeStage.from, activeStage.to, easing(stageT));
+    setCameraPose(viewer, pose);
+
+    if (overallT < 1) {
+      rafId = requestAnimationFrame(tick);
+    } else {
+      setCameraPose(viewer, endPose);
       finished = true;
       opts.complete?.();
     }

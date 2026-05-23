@@ -21,9 +21,16 @@ const ROT_Z_DEG = 0;
 const SCRUB_DISTANCE = '+=520%';
 const STACK_ORIGIN_X = '54%';
 const STACK_ORIGIN_Y = '59%';
-const CARD_WIDTH = 'clamp(440px, 36vw, 660px)';
-const CARD_ASPECT = '16 / 11';
+const CARD_WIDTH = 'clamp(360px, 30vw, 540px)';
+const CARD_ASPECT = '1 / 1';
 const VISIBLE_RADIUS = 9;
+// Hover: pull the active cover out of the stack to the right, lift it toward
+// the viewer, and scale it slightly so the artwork can be inspected.
+// toward the viewer, and scale it slightly — together this reads as the
+const HOVER_SHIFT_X_PX = 150;
+const HOVER_SHIFT_Y_PX = -42;
+const HOVER_LIFT_Z_PX = 360;
+const HOVER_SCALE = 1.08;
 
 // Extra copies before and after the live set keep the pinned scrub from showing gaps.
 const LOOP_COPIES = 2;
@@ -48,9 +55,7 @@ const NOISE_TEXTURE =
 // reference (unveil.fr) are full-bleed images on translucent glass panes —
 // per-card color treatments are intentionally removed.
 const FALLBACK_PAPER_BG = 'linear-gradient(155deg, rgba(20,20,22,0.85) 0%, rgba(10,10,12,0.95) 100%)';
-const LABEL_LIGHT = 'rgba(255,255,255,0.84)';
 const LABEL_DARK = 'rgba(255,255,255,0.84)';
-const LABEL_SHADOW = '0 1px 4px rgba(0,0,0,0.6)';
 
 const TEXT_FIXES = [
   [/\u00c2\u00b7/g, ' / '],
@@ -75,6 +80,14 @@ function cleanText(value) {
   ).replace(/\s{2,}/g, ' ');
 }
 
+function setProjectsFinaleReady(isReady) {
+  if (typeof window === 'undefined') return;
+  window.projectsFinaleReady = isReady;
+  if (isReady) {
+    window.dispatchEvent(new Event('projectsFinaleReady'));
+  }
+}
+
 function buildVirtualCards() {
   if (!PROJECT_COUNT) return [];
 
@@ -90,7 +103,7 @@ function buildVirtualCards() {
 
 const VIRTUAL_CARDS = buildVirtualCards();
 
-function ProjectCover({ project, index, isActive = false }) {
+function ProjectCover({ project, index }) {
   const [imageFailed, setImageFailed] = useState(false);
   const title = cleanText(project.title);
   const role = cleanText(project.role);
@@ -108,8 +121,8 @@ function ProjectCover({ project, index, isActive = false }) {
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
           style={{
-            opacity: isActive ? 0.90 : 0.70,
-            transition: 'opacity 0.4s ease',
+            opacity: 1,
+            transition: 'opacity 0.25s ease',
           }}
         />
       )}
@@ -145,43 +158,50 @@ function ProjectCover({ project, index, isActive = false }) {
       )}
 
       {/* Tiny corner labels — index top-left, year bottom-right. Tone
-          adapts to the cover surface so the type stays legible. */}
-      <div
-        className="absolute left-4 top-3 font-mono text-[9px] uppercase tracking-[0.32em]"
-        style={{
-          color: useFallback ? LABEL_DARK : LABEL_LIGHT,
-          textShadow: useFallback ? 'none' : LABEL_SHADOW,
-        }}
-      >
-        {pad2(index)}
-      </div>
-      <div
-        className="absolute bottom-3 right-4 font-mono text-[9px] uppercase tracking-[0.28em]"
-        style={{
-          color: useFallback ? LABEL_DARK : LABEL_LIGHT,
-          textShadow: useFallback ? 'none' : LABEL_SHADOW,
-        }}
-      >
-        {project.year}
-      </div>
+          only render for fallback covers so supplied artwork stays clean. */}
+      {useFallback && (
+        <>
+          <div
+            className="absolute left-4 top-3 font-mono text-[9px] uppercase tracking-[0.32em]"
+            style={{ color: LABEL_DARK, textShadow: 'none' }}
+          >
+            {pad2(index)}
+          </div>
+          <div
+            className="absolute bottom-3 right-4 font-mono text-[9px] uppercase tracking-[0.28em]"
+            style={{ color: LABEL_DARK, textShadow: 'none' }}
+          >
+            {project.year}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
   const { project, realIndex, sequenceIndex } = card;
+  const [isHovered, setIsHovered] = useState(false);
   const distance = Math.abs(sequenceIndex - activeSequenceIndex);
   const isActive = sequenceIndex === activeSequenceIndex;
   const visible = distance <= VISIBLE_RADIUS;
-  const mutedOpacity = Math.max(0.34, 0.9 - distance * 0.052);
-  const opacity = visible ? (isActive ? 0.94 : mutedOpacity) : 0;
+  const canInteract = visible;
+  const hoverActive = canInteract && isHovered && !reducedMotion;
+  const opacity = visible ? 1 : 0;
+  const hoverTransform = hoverActive
+    ? ` translate3d(${HOVER_SHIFT_X_PX}px, ${HOVER_SHIFT_Y_PX}px, ${HOVER_LIFT_Z_PX}px) scale(${HOVER_SCALE})`
+    : '';
 
   return (
     <button
       type="button"
       onClick={() => onOpen(project)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
       aria-label={`Open ${cleanText(project.title)}`}
-      className="absolute cursor-pointer overflow-hidden rounded-[2px] p-0 text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-4"
+      className="absolute cursor-pointer overflow-visible rounded-[2px] p-0 text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-4"
       style={{
         left: STACK_ORIGIN_X,
         top: STACK_ORIGIN_Y,
@@ -190,42 +210,63 @@ function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
         transform: `translate(-50%, -50%) translate3d(${sequenceIndex * STEP_X_VW}vw, ${sequenceIndex * STEP_Y_VW}vw, ${sequenceIndex * STEP_Z_PX}px) rotateX(${ROT_X_DEG}deg) rotateY(${ROT_Y_DEG}deg) rotateZ(${ROT_Z_DEG}deg)`,
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
-        zIndex: 1000 - sequenceIndex,
-        border: `1px solid ${BORDER_CARD}`,
-        background: 'rgba(15, 15, 15, 0.45)',
-        backdropFilter: 'blur(10px)',
-        boxShadow: isActive ? SHADOW_ACTIVE : SHADOW_DEFAULT,
-        filter: isActive ? 'brightness(1.02) saturate(1.04)' : 'brightness(0.94) saturate(0.92)',
+        zIndex: hoverActive ? 3000 : 1000 - sequenceIndex,
         opacity,
-        pointerEvents: distance <= 2 ? 'auto' : 'none',
-        transition: reducedMotion
-          ? 'none'
-          : 'opacity 0.36s ease, filter 0.36s ease, box-shadow 0.36s ease',
+        pointerEvents: canInteract ? 'auto' : 'none',
+        transition: reducedMotion ? 'none' : 'opacity 0.24s ease',
         willChange: 'transform, opacity',
         outlineColor: FOCUS_RING,
       }}
     >
-      <ProjectCover project={project} index={realIndex} isActive={isActive} />
+      <span
+        className="absolute inset-0 block overflow-hidden rounded-[2px]"
+        style={{
+          border: `1px solid ${BORDER_CARD}`,
+          background: 'rgba(15, 15, 15, 1)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: hoverActive || isActive ? SHADOW_ACTIVE : SHADOW_DEFAULT,
+          filter: hoverActive || isActive ? 'brightness(1.03) saturate(1.05)' : 'brightness(1) saturate(1)',
+          transform: hoverActive ? hoverTransform : 'translate3d(0, 0, 0) scale(1)',
+          transformStyle: 'preserve-3d',
+          transition: reducedMotion
+            ? 'none'
+            : 'transform 0.42s cubic-bezier(0.16, 1, 0.3, 1), filter 0.24s ease, box-shadow 0.24s ease',
+          willChange: 'transform',
+        }}
+      >
+        <ProjectCover project={project} index={realIndex} />
+      </span>
     </button>
   );
 }
 
 function GridCard({ project, index, onOpen }) {
+  const [isHovered, setIsHovered] = useState(false);
   return (
     <button
       type="button"
       onClick={() => onOpen(project)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
       aria-label={`Open ${cleanText(project.title)}`}
-      className="group relative aspect-[16/11] cursor-pointer overflow-hidden rounded-[2px] p-0 text-left outline-none transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4"
+      className="group relative aspect-square cursor-pointer overflow-hidden rounded-[2px] p-0 text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-4"
       style={{
         border: `1px solid ${BORDER_CARD}`,
         background: 'rgba(15, 15, 15, 0.45)',
         backdropFilter: 'blur(10px)',
-        boxShadow: SHADOW_DEFAULT,
+        boxShadow: isHovered ? SHADOW_ACTIVE : SHADOW_DEFAULT,
         outlineColor: FOCUS_RING,
+        // Mirror the stack hover: slide RIGHT out of the grid row + lift up +
+        // scale, so the hovered cover pops forward to show the artwork.
+        transform: isHovered ? 'translate3d(14px, -10px, 0) scale(1.04)' : 'translate3d(0, 0, 0) scale(1)',
+        transition: 'transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s ease',
+        zIndex: isHovered ? 20 : 1,
+        willChange: 'transform',
       }}
     >
-      <ProjectCover project={project} index={index} isActive />
+      <ProjectCover project={project} index={index} />
     </button>
   );
 }
@@ -304,8 +345,8 @@ function FullscreenView({ project, onClose, reducedMotion }) {
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
-        <div className="relative aspect-[16/9] w-full overflow-hidden">
-          <ProjectCover project={project} index={projectIndex} isActive />
+        <div className="relative aspect-square w-full overflow-hidden">
+          <ProjectCover project={project} index={projectIndex} />
         </div>
         <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[1fr_auto] md:p-10">
           <div>
@@ -408,6 +449,7 @@ export default function ProjectsFinale() {
   useEffect(() => {
     window.projectsFinaleActive = false;
     window.projectsScrollProgress = 0;
+    setProjectsFinaleReady(false);
 
     const useStack = isUnlocked && mode === 'OVERVIEW' && !reducedMotion && !isMobile;
     if (!useStack || !PROJECT_COUNT) {
@@ -470,11 +512,17 @@ export default function ProjectsFinale() {
     }, sectionRef);
 
     ScrollTrigger.refresh();
+    const readyFrame = window.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+      setProjectsFinaleReady(true);
+    });
 
     return () => {
+      window.cancelAnimationFrame(readyFrame);
       ctx.revert();
       window.projectsFinaleActive = false;
       window.projectsScrollProgress = 0;
+      setProjectsFinaleReady(false);
       document.body.classList.remove('in-projects-finale');
     };
   }, [mode, reducedMotion, isMobile, isUnlocked]);
@@ -506,9 +554,18 @@ export default function ProjectsFinale() {
     if (!isUnlocked || useStack) return undefined;
 
     const section = sectionRef.current;
+    const readyFrame = window.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+      setProjectsFinaleReady(true);
+    });
+
     if (!section || typeof IntersectionObserver === 'undefined') {
       document.body.classList.add('in-projects-finale');
-      return () => document.body.classList.remove('in-projects-finale');
+      return () => {
+        window.cancelAnimationFrame(readyFrame);
+        setProjectsFinaleReady(false);
+        document.body.classList.remove('in-projects-finale');
+      };
     }
 
     const observer = new IntersectionObserver(
@@ -520,7 +577,9 @@ export default function ProjectsFinale() {
     observer.observe(section);
 
     return () => {
+      window.cancelAnimationFrame(readyFrame);
       observer.disconnect();
+      setProjectsFinaleReady(false);
       document.body.classList.remove('in-projects-finale');
     };
   }, [isUnlocked, useStack]);

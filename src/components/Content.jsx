@@ -5,6 +5,7 @@ import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { destinations, journeyNavItems } from '../lib/data/destinations';
 import LandmarkTitleCard from './LandmarkTitleCard';
 import ProjectsFinale from './ProjectsFinale';
+import SplitWords from './SplitWords';
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
@@ -130,25 +131,373 @@ const cardSide = (i) => (i % 2 === 0 ? 'right' : 'left');
    Component
    ──────────────────────────────────────────────────────────── */
 const setDestinationTourState = (index) => {
+  const now = performance.now();
+  const current = window.destinationTourState;
+  if (
+    current?.index === index
+    && current.requestedAt
+    && now - current.requestedAt < 8000
+  ) {
+    window.destinationTourActive = true;
+    return false;
+  }
+
   window.destinationTourActive = true;
   window.destinationTourState = {
     index,
     progress: 1,
-    requestedAt: performance.now(),
+    requestedAt: now,
   };
+  return true;
 };
 
 const FINAL_DESTINATION_ID = 'world-trade-center-nyc';
+// How long the camera must hold steady (codexDestinationFlying === false)
+// before we accept it as "settled" and trigger the title-in animation. Too
+// short and a brief flyTo cancellation will re-enter the title prematurely;
+// too long and the title feels unresponsive after the camera lands.
 const REVEAL_ENTRY_BUFFER_MS = 180;
-const REVEAL_STABLE_MS = 180;
-const REVEAL_FALLBACK_MS = 3200;
+const REVEAL_STABLE_MS = 200;
+const REVEAL_FALLBACK_MS = 6500;
+const TECHNOLOGY_PANEL_HOLD_MS = 1200;
+const TECHNOLOGY_SNAP_GUARD_MS = 2200;
+const TECHNOLOGY_GESTURE_QUIET_MS = 1200;
+
+/* ────────────────────────────────────────────────────────────
+   ContentSection
+   Editorial typography panel for one of the five globalization
+   topics. Each word in the headline, microcopy, and "Archive
+   Index" link is wrapped in a `.split-word` inline-block span so
+   GSAP can pan them in/out horizontally with a per-word stagger.
+   ──────────────────────────────────────────────────────────── */
+function ContentSection({ sec, index, onActive, onLeave }) {
+  const sectionRef = useRef(null);
+  const side = cardSide(index);
+  const headlinePos = side === 'right' ? 'right-[6vw]' : 'left-[6vw]';
+  const microcopyPos = side === 'right' ? 'left-[6vw]' : 'right-[6vw]';
+  const headlineAlign = side === 'right' ? 'text-right' : 'text-left';
+  const indentProp = side === 'right' ? 'paddingRight' : 'paddingLeft';
+  const microLabel = `${String(index + 1).padStart(2, '0')} — ${sec.navLabel}`;
+  const fullHeadline = `${sec.headlineLines.join(' ')}.`;
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return undefined;
+
+    const reduced = typeof window !== 'undefined'
+      && window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const headlineWords = Array.from(section.querySelectorAll('h2 .split-word'));
+    const detailWords = Array.from(section.querySelectorAll('.content-panel-copy .split-word'));
+    const words = [...headlineWords, ...detailWords];
+
+    if (reduced) {
+      // Reduced motion: words stay statically visible; only signal which
+      // section is active so the nav highlight and globe tilt still update.
+      gsap.set(words, { opacity: 1, x: 0, y: 0 });
+      const st = ScrollTrigger.create({
+        trigger: section,
+        start: 'top center',
+        end: 'bottom center',
+        onEnter: () => onActive?.(index),
+        onEnterBack: () => onActive?.(index),
+        onLeave: () => onLeave?.(index),
+        onLeaveBack: () => onLeave?.(index),
+      });
+      return () => st.kill();
+    }
+
+    // Each word starts below its final position and fades in. Stagger is
+    // intentionally larger than the duration-relative micro-cascade the
+    // previous X-slide used, so the reveal reads as discrete word-by-word
+    // beats instead of a near-simultaneous block fade.
+    gsap.set(words, { opacity: 0, x: 0, y: 28 });
+
+    let activeTl = null;
+
+    const playEnter = () => {
+      activeTl?.kill();
+      gsap.set(words, { opacity: 0, x: 0, y: 28 });
+      activeTl = gsap.timeline();
+      activeTl.to(headlineWords, {
+        opacity: 1,
+        y: 0,
+        duration: 0.62,
+        ease: 'power3.out',
+        stagger: 0.075,
+      }, 0);
+      activeTl.to(detailWords, {
+        opacity: 1,
+        y: 0,
+        duration: 0.54,
+        ease: 'power3.out',
+        stagger: 0.038,
+      }, 0.12);
+    };
+
+    const playExit = () => {
+      activeTl?.kill();
+      activeTl = gsap.timeline();
+      activeTl.to(headlineWords, {
+        opacity: 0,
+        y: -22,
+        duration: 0.42,
+        ease: 'power2.in',
+        stagger: 0.035,
+      }, 0);
+      activeTl.to(detailWords, {
+        opacity: 0,
+        y: -22,
+        duration: 0.34,
+        ease: 'power2.in',
+        stagger: 0.022,
+      }, 0.04);
+    };
+
+    const st = ScrollTrigger.create({
+      trigger: section,
+      start: 'top center',
+      end: 'bottom center',
+      onEnter: () => { onActive?.(index); playEnter(); },
+      onEnterBack: () => { onActive?.(index); playEnter(); },
+      onLeave: () => { onLeave?.(index); playExit(); },
+      onLeaveBack: () => { onLeave?.(index); playExit(); },
+    });
+
+    return () => {
+      activeTl?.kill();
+      st.kill();
+    };
+  }, [index, onActive, onLeave]);
+
+  return (
+    <section
+      id={sec.id}
+      ref={sectionRef}
+      className="panel-section relative w-full overflow-visible"
+      style={{ minHeight: '100vh' }}
+      aria-labelledby={`${sec.id}-title`}
+    >
+      <div
+        className="content-panel-type pointer-events-none absolute inset-0 z-20"
+      >
+        {/* Huge editorial headline — top, outer edge */}
+        <h2
+          id={`${sec.id}-title`}
+          className={`pointer-events-auto absolute top-[14vh] ${headlinePos} max-w-[88vw] font-semibold text-white leading-[0.92] tracking-[-0.018em] ${headlineAlign}`}
+          style={{ fontSize: 'clamp(54px, 10.4vw, 200px)' }}
+          aria-label={fullHeadline}
+        >
+          <span aria-hidden="true">
+            {sec.headlineLines.map((line, lineIdx) => {
+              const isLastLine = lineIdx === sec.headlineLines.length - 1;
+              const words = line.split(/\s+/).filter(Boolean);
+              return (
+                <span
+                  key={`${sec.id}-line-${lineIdx}`}
+                  className="block"
+                  style={{ [indentProp]: `${lineIdx}ch` }}
+                >
+                  {words.map((word, wordIdx) => {
+                    const isLastWord = isLastLine && wordIdx === words.length - 1;
+                    return (
+                      <span key={wordIdx}>
+                        {wordIdx > 0 && ' '}
+                        <span
+                          className="split-word"
+                          style={{ display: 'inline-block', willChange: 'transform, opacity' }}
+                        >
+                          {word}
+                          {isLastWord && <span className="text-[#FF3B30]">.</span>}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </span>
+              );
+            })}
+          </span>
+        </h2>
+
+        {/* Microcopy block — bottom, opposite edge (near globe).
+            Always text-left (ragged-right) regardless of which corner
+            it lives in — matches the editorial reference. */}
+        <div
+          className={`content-panel-copy pointer-events-auto absolute bottom-[10vh] ${microcopyPos} flex w-[88vw] max-w-[300px] flex-col gap-4 text-left`}
+        >
+          <SplitWords
+            as="span"
+            text={microLabel}
+            className="font-mono text-[10px] uppercase tracking-[0.32em] text-white/60"
+          />
+          <SplitWords
+            as="p"
+            text={sec.summary}
+            className="text-[12px] leading-[1.55] text-white sm:text-[13px]"
+          />
+          <a
+            href="#destination-colosseum"
+            className="self-start text-[11px] font-semibold text-white underline underline-offset-[5px] decoration-white/60 transition-colors hover:decoration-white"
+            aria-label="Archive Index"
+          >
+            <span aria-hidden="true">
+              <span
+                className="split-word"
+                style={{ display: 'inline-block', willChange: 'transform, opacity' }}
+              >
+                Archive
+              </span>
+              {' '}
+              <span
+                className="split-word"
+                style={{ display: 'inline-block', willChange: 'transform, opacity' }}
+              >
+                Index
+              </span>
+            </span>
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Content({ lenisRef }) {
   const containerRef = useRef(null);
   const [activeSection, setActiveSection] = useState(-1);
   const [activeJourneyIndex, setActiveJourneyIndex] = useState(-1);
   const [isJourneyMenuOpen, setIsJourneyMenuOpen] = useState(false);
-  const [destinationReadySet, setDestinationReadySet] = useState(() => new Set());
+  const activeJourneyIndexRef = useRef(-1);
+
+  // ── Title state machine ──────────────────────────────────
+  // The only title that should ever be rendering visibly. -1 = none on screen.
+  const [visibleTitleIndex, setVisibleTitleIndex] = useState(-1);
+  // 'hidden' | 'entering' | 'visible' | 'exiting'. Drives the LandmarkTitleCard
+  // animation phase for the index in visibleTitleIndex.
+  const [titlePhase, setTitlePhase] = useState('hidden');
+
+  // Refs mirror the title state machine so the wheel/touch/nav handlers can
+  // read the latest values without re-binding on every state update.
+  const visibleTitleIndexRef = useRef(-1);
+  const titlePhaseRef = useRef('hidden');
+  // Action to invoke once the current exit animation finishes — used by the
+  // wheel/touch/nav handlers to defer the actual scroll/snap until the
+  // previous landmark title has finished animating out.
+  const pendingActionRef = useRef(null);
+
+  useEffect(() => {
+    visibleTitleIndexRef.current = visibleTitleIndex;
+  }, [visibleTitleIndex]);
+  useEffect(() => {
+    titlePhaseRef.current = titlePhase;
+  }, [titlePhase]);
+  useEffect(() => {
+    activeJourneyIndexRef.current = activeJourneyIndex;
+  }, [activeJourneyIndex]);
+
+  const reducedMotionPreferred =
+    typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Stable callbacks for ContentSection ScrollTriggers. The globe tilt and
+  // active-section state used to live in the parent effect; lifting them out
+  // here keeps the ContentSection effect deps stable across renders.
+  const handleSectionEnter = useCallback((sectionIndex) => {
+    setActiveSection(sectionIndex);
+    window.globeTargetDirection = sectionIndex % 2 === 0 ? -1 : 1;
+    if (sectionIndex === sections.length - 1) {
+      window.codexTechnologyPanelHoldUntil = Math.max(
+        window.codexTechnologyPanelHoldUntil || 0,
+        performance.now() + TECHNOLOGY_PANEL_HOLD_MS,
+      );
+      window.codexTechnologyPanelArmed = false;
+      if (window.codexTechnologyPanelArmTimer) {
+        window.clearTimeout(window.codexTechnologyPanelArmTimer);
+      }
+      window.codexTechnologyPanelArmTimer = window.setTimeout(() => {
+        window.codexTechnologyPanelArmed = true;
+      }, TECHNOLOGY_GESTURE_QUIET_MS);
+    }
+  }, []);
+
+  const handleSectionLeave = useCallback(() => {
+    window.globeTargetDirection = 0;
+  }, []);
+
+  // LandmarkTitleCard callbacks. Stable references so the child effect deps
+  // don't re-run every parent render.
+  const handleTitleEnterComplete = useCallback((index) => {
+    if (visibleTitleIndexRef.current !== index) return;
+    if (activeJourneyIndexRef.current !== index) return;
+    titlePhaseRef.current = 'visible';
+    setTitlePhase('visible');
+  }, []);
+
+  const handleTitleExitComplete = useCallback((index) => {
+    if (visibleTitleIndexRef.current !== index) return;
+    visibleTitleIndexRef.current = -1;
+    titlePhaseRef.current = 'hidden';
+    setVisibleTitleIndex(-1);
+    setTitlePhase('hidden');
+
+    const pending = pendingActionRef.current;
+    pendingActionRef.current = null;
+    if (pending) {
+      // Defer one frame so the state updates above commit before the action
+      // (which usually kicks off a scroll/snap that reads the same state).
+      window.requestAnimationFrame(pending);
+    }
+  }, []);
+
+  // Run `action` after the currently-visible title finishes animating out.
+  // If no title is on screen we run it immediately. If an exit is already in
+  // flight we just replace any earlier pending action (last call wins).
+  const withTitleExit = useCallback((action) => {
+    const phase = titlePhaseRef.current;
+    const idx = visibleTitleIndexRef.current;
+    if (phase === 'exiting') {
+      pendingActionRef.current = action;
+      return;
+    }
+    if (idx >= 0 && (phase === 'visible' || phase === 'entering')) {
+      pendingActionRef.current = action;
+      titlePhaseRef.current = 'exiting';
+      setTitlePhase('exiting');
+      return;
+    }
+    action();
+  }, []);
+
+  const activateJourneyIndex = useCallback((index) => {
+    if (index < 0 || index >= destinations.length) return;
+    if (window.projectsFinaleTransitioning) return;
+    if (
+      activeJourneyIndexRef.current === index
+      && window.destinationTourActive
+      && window.destinationTourState?.index === index
+    ) {
+      return;
+    }
+    const didRequestTour = setDestinationTourState(index);
+    activeJourneyIndexRef.current = index;
+    setActiveSection(sections.length + index);
+    setActiveJourneyIndex(index);
+    if (!didRequestTour) {
+      window.destinationTourActive = true;
+    }
+  }, []);
+
+  const settleJourneyIndex = useCallback((index) => {
+    if (index < 0 || index >= destinations.length) return;
+    ScrollTrigger.update();
+    window.requestAnimationFrame(() => {
+      ScrollTrigger.update();
+      activateJourneyIndex(index);
+      window.setTimeout(() => activateJourneyIndex(index), 120);
+    });
+  }, [activateJourneyIndex]);
 
   /* ── ScrollTrigger wiring ───────────────────────────────── */
   useEffect(() => {
@@ -159,6 +508,8 @@ export default function Content({ lenisRef }) {
     window.projectsFinaleActive = false;
     window.projectsScrollProgress = 0;
     window.projectsFinaleUnlocked = false;
+    window.projectsFinaleReady = false;
+    window.projectsFinaleTransitioning = false;
     document.body.classList.remove('in-projects-finale');
 
     const reducedMotion =
@@ -167,186 +518,162 @@ export default function Content({ lenisRef }) {
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (reducedMotion) {
-      // No scroll-scrubbed animations — content stays statically visible
+      // No scroll-scrubbed animations — content stays statically visible.
       window.globeTargetDirection = 0;
       return undefined;
     }
 
+    let syncFrame = null;
+    let viewportSyncFrame = null;
+    let viewportSyncTimer = null;
+    let viewportSyncTrigger = null;
+    let scheduleActiveDestinationSync = null;
+    const syncTimers = [];
+
     const ctx = gsap.context(() => {
-      const cards = gsap.utils.toArray('.pingpong-card');
+      // Section panels (Culture → Technology) own their own ScrollTriggers
+      // inside ContentSection so the word-by-word slide-in / slide-out
+      // animations can stay scoped to each section's DOM subtree.
 
-      cards.forEach((card, i) => {
-        const panel = card.closest('.panel-section');
-        if (!panel) return;
+      // Each landmark gets a short top-pin so it behaves as a discrete page.
+      // The wheel/touch handler below snaps to the next landmark on a single
+      // scroll input — and the title state machine (see useEffect later in
+      // this component) drives the in/out animations independently from the
+      // ScrollTrigger callbacks.
+      const destinationPanels = gsap.utils.toArray('.destination-section');
 
-        const side = cardSide(i);
-        const staggerEls = card.querySelectorAll('.stagger-item');
-
-        gsap.set(card, { opacity: 0, x: side === 'right' ? 100 : -100 });
-        gsap.set(staggerEls, { opacity: 0, y: 30 });
-
-        const tl = gsap.timeline({ paused: true });
-        tl.to(card, {
-          opacity: 1,
-          x: 0,
-          duration: 0.7,
-          ease: 'power2.out',
-        });
-        tl.to(
-          staggerEls,
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.55,
-            ease: 'power2.out',
-            stagger: 0.08,
-          },
-          '<+=0.15',
-        );
-
-        ScrollTrigger.create({
-          trigger: panel,
-          start: 'top center',
-          end: 'bottom center',
-          onEnter: () => {
-            setActiveSection(i);
-            window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
-            tl.play(0);
-          },
-          onEnterBack: () => {
-            setActiveSection(i);
-            window.globeTargetDirection = i % 2 === 0 ? -1 : 1;
-            tl.play(0);
-          },
-          onLeave: () => {
-            window.globeTargetDirection = 0;
-          },
-          onLeaveBack: () => {
-            window.globeTargetDirection = 0;
-          },
-        });
-      });
-
-      const destinationCards = gsap.utils.toArray('.destination-card');
-
-      destinationCards.forEach((card, i) => {
-        const panel = card.closest('.destination-section');
-        if (!panel) return;
-        const revealEls = panel.querySelectorAll('.destination-reveal');
-
-        gsap.set(card, {
-          opacity: 0,
-          y: 60,
-          scale: 1,
-          xPercent: -50,
-        });
-        gsap.set(revealEls, { opacity: 0, y: 18 });
-
-        // Entering a destination panel is enough to launch the full card
-        // reveal and Mapbox flight. The animation is no longer scrubbed by
-        // continued wheel/touch movement.
-        const revealCard = () => {
-          setActiveSection(sections.length + i);
-          setActiveJourneyIndex(i);
-          setDestinationTourState(i);
-          setDestinationReadySet((prev) => {
-            const next = new Set(prev);
-            next.delete(i);
-            return next;
-          });
-
-          gsap.killTweensOf([card, ...revealEls]);
-          gsap.set(revealEls, { opacity: 0, y: 18 });
-          gsap.to(card, {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            duration: 0.34,
-            ease: 'power2.out',
-            overwrite: true,
-          });
-          gsap.to(revealEls, {
-            opacity: 1,
-            y: 0,
-            duration: 0.46,
-            ease: 'power2.out',
-            stagger: 0.04,
-            overwrite: true,
-          });
-        };
-
-        const hideCard = (y = -24) => {
-          setDestinationReadySet((prev) => {
-            const next = new Set(prev);
-            next.delete(i);
-            return next;
-          });
-          gsap.killTweensOf([card, ...revealEls]);
-          gsap.to(card, {
-            opacity: 0,
-            y,
-            scale: 1,
-            duration: 0.24,
-            ease: 'power2.in',
-            overwrite: true,
-          });
-          gsap.to(revealEls, {
-            opacity: 0,
-            y: y < 0 ? -18 : 18,
-            duration: 0.24,
-            ease: 'power2.in',
-            overwrite: true,
-          });
-        };
-
-        // Short pin so each landmark behaves as a discrete page.
-        // The wheel/touch handler below auto-snaps to the next landmark
-        // after a single scroll input.
+      destinationPanels.forEach((panel, i) => {
         ScrollTrigger.create({
           trigger: panel,
           start: 'top top',
           end: '+=10%',
           pin: true,
           anticipatePin: 1,
-          onEnter: revealCard,
-          onEnterBack: revealCard,
-          onLeave: () => hideCard(-24),
+          onEnter: () => {
+            activateJourneyIndex(i);
+          },
+          onEnterBack: () => {
+            activateJourneyIndex(i);
+          },
           onLeaveBack: () => {
-            hideCard(40);
             if (i === 0) {
               window.destinationTourActive = false;
+              activeJourneyIndexRef.current = -1;
               setActiveJourneyIndex(-1);
             } else {
-              setDestinationTourState(i - 1);
-              setActiveJourneyIndex(i - 1);
+              activateJourneyIndex(i - 1);
             }
           },
         });
       });
+
+      const syncActiveDestinationFromViewport = () => {
+        const viewportHeight = window.innerHeight;
+        const activePanel = destinationPanels.reduce((best, panel, index) => {
+          const rect = panel.getBoundingClientRect();
+          if (rect.bottom <= 0 || rect.top >= viewportHeight) return best;
+
+          const score = Math.abs(rect.top);
+          if (
+            !best
+            || score < best.score - 1
+            || (Math.abs(score - best.score) <= 1 && index > best.index)
+          ) {
+            return { index, score };
+          }
+          return best;
+        }, null);
+
+        if (!activePanel) return;
+        activateJourneyIndex(activePanel.index);
+        syncTimers.push(window.setTimeout(() => activateJourneyIndex(activePanel.index), 120));
+      };
+
+      scheduleActiveDestinationSync = () => {
+        if (!viewportSyncFrame) {
+          viewportSyncFrame = window.requestAnimationFrame(() => {
+            viewportSyncFrame = null;
+            syncActiveDestinationFromViewport();
+          });
+        }
+        if (viewportSyncTimer) window.clearTimeout(viewportSyncTimer);
+        viewportSyncTimer = window.setTimeout(() => {
+          viewportSyncTimer = null;
+          syncActiveDestinationFromViewport();
+        }, 220);
+      };
+
+      viewportSyncTrigger = ScrollTrigger.create({
+        start: 0,
+        end: 'max',
+        onUpdate: scheduleActiveDestinationSync,
+      });
+      window.addEventListener('scroll', scheduleActiveDestinationSync, { passive: true });
+
+      ScrollTrigger.refresh();
+      syncFrame = window.requestAnimationFrame(() => {
+        ScrollTrigger.update();
+        syncActiveDestinationFromViewport();
+      });
+      [150, 500, 1000, 1800].forEach((delay) => {
+        syncTimers.push(window.setTimeout(() => {
+          ScrollTrigger.update();
+          syncActiveDestinationFromViewport();
+        }, delay));
+      });
     }, containerRef);
 
     return () => {
+      if (syncFrame) window.cancelAnimationFrame(syncFrame);
+      if (viewportSyncFrame) window.cancelAnimationFrame(viewportSyncFrame);
+      if (viewportSyncTimer) window.clearTimeout(viewportSyncTimer);
+      if (scheduleActiveDestinationSync) {
+        window.removeEventListener('scroll', scheduleActiveDestinationSync);
+      }
+      viewportSyncTrigger?.kill();
+      syncTimers.forEach((timer) => window.clearTimeout(timer));
       ctx.revert();
       window.romeModeActive = false;
       window.destinationTourActive = false;
       window.projectsFinaleUnlocked = false;
+      window.projectsFinaleReady = false;
+      window.projectsFinaleTransitioning = false;
       document.body.classList.remove('in-projects-finale');
     };
-  }, []);
+  }, [activateJourneyIndex]);
 
-  /* -- Per-destination reveal waits for the Cesium camera to settle -- */
+  /* ── Drive the title-out animation when activeJourneyIndex changes ──
+     If the user has scrolled (or clicked) to a new landmark while a title
+     is still visible, kick off its exit so the new one can come in cleanly.
+     The wheel/touch/nav handlers below also call into the exit path before
+     initiating the scroll itself; this effect catches any remaining case
+     (e.g., scrolling back from the first landmark to the home section). */
+  useEffect(() => {
+    const phase = titlePhaseRef.current;
+    const visIdx = visibleTitleIndexRef.current;
+
+    if (visIdx < 0) return;
+    if (visIdx === activeJourneyIndex) return;
+    if (phase !== 'visible' && phase !== 'entering') return;
+
+    titlePhaseRef.current = 'exiting';
+    setTitlePhase('exiting');
+  }, [activeJourneyIndex]);
+
+  /* ── Per-destination reveal waits for the Cesium camera to settle ──
+     The title-in animation only fires once:
+       1. activeJourneyIndex points at a real destination, AND
+       2. No other title is currently on screen (visibleTitleIndex === -1),
+          which means any previous title has finished exiting, AND
+       3. window.codexDestinationFlying has been false for REVEAL_STABLE_MS,
+          confirming the camera has actually settled on the landmark. */
   useEffect(() => {
     if (activeJourneyIndex < 0) return undefined;
+    if (visibleTitleIndex >= 0) return undefined;
+    if (titlePhase !== 'hidden') return undefined;
 
-    const currentIndex = activeJourneyIndex;
-
-    // Already revealed — nothing to do.
-    if (destinationReadySet.has(currentIndex)) {
-      return undefined;
-    }
-
+    const targetIndex = activeJourneyIndex;
     let cancelled = false;
-    let revealed = false;
     let entryTimer = null;
     let stableTimer = null;
     let fallbackTimer = null;
@@ -364,34 +691,39 @@ export default function Content({ lenisRef }) {
       }
     };
 
-    const revealDestination = () => {
-      if (cancelled || revealed) return;
-      revealed = true;
+    const triggerEnter = () => {
+      if (cancelled) return;
+      // Bail if state has moved on (user already scrolled past again).
+      if (activeJourneyIndexRef.current !== targetIndex) return;
+      if (!reducedMotion && window.codexDestinationFlying) return;
+      if (window.destinationTourActive && window.destinationTourState?.index !== targetIndex) return;
       clearStableTimer();
       if (rafId) window.cancelAnimationFrame(rafId);
-      setDestinationReadySet((prev) => new Set(prev).add(currentIndex));
+      visibleTitleIndexRef.current = targetIndex;
+      titlePhaseRef.current = 'entering';
+      setVisibleTitleIndex(targetIndex);
+      setTitlePhase('entering');
     };
 
-    // Reduced motion: camera jumps instantly, reveal immediately.
     if (reducedMotion) {
-      revealDestination();
+      triggerEnter();
       return undefined;
     }
 
     const checkCameraSettled = () => {
-      if (cancelled || revealed) return;
+      if (cancelled) return;
 
       if (window.codexDestinationFlying) {
         clearStableTimer();
       } else if (!stableTimer) {
-        stableTimer = window.setTimeout(revealDestination, REVEAL_STABLE_MS);
+        stableTimer = window.setTimeout(triggerEnter, REVEAL_STABLE_MS);
       }
 
       rafId = window.requestAnimationFrame(checkCameraSettled);
     };
 
     entryTimer = window.setTimeout(checkCameraSettled, REVEAL_ENTRY_BUFFER_MS);
-    fallbackTimer = window.setTimeout(revealDestination, REVEAL_FALLBACK_MS);
+    fallbackTimer = window.setTimeout(triggerEnter, REVEAL_FALLBACK_MS);
 
     return () => {
       cancelled = true;
@@ -400,7 +732,7 @@ export default function Content({ lenisRef }) {
       clearStableTimer();
       if (rafId) window.cancelAnimationFrame(rafId);
     };
-  }, [activeJourneyIndex, destinationReadySet]);
+  }, [activeJourneyIndex, visibleTitleIndex, titlePhase]);
 
   /* ── 1-scroll auto-advance between all content panels ───── */
   useEffect(() => {
@@ -412,16 +744,87 @@ export default function Content({ lenisRef }) {
 
     let isSnapping = false;
     let cooldownTimer = null;
+    let guardRestartTimer = null;
     let touchStartY = null;
     let lastWheelTime = 0;
+    let freshWheelGuardUntil = 0;
 
-    const releaseLock = (delay = 220) => {
+    const extendFreshWheelGuard = (durationMs) => {
+      const nextUntil = performance.now() + durationMs;
+      freshWheelGuardUntil = Math.max(freshWheelGuardUntil, nextUntil);
+      window.codexTechnologyPanelHoldUntil = Math.max(
+        window.codexTechnologyPanelHoldUntil || 0,
+        nextUntil,
+      );
+    };
+
+    const disarmTechnologyUntilQuiet = () => {
+      window.codexTechnologyPanelArmed = false;
+      if (window.codexTechnologyPanelArmTimer) {
+        window.clearTimeout(window.codexTechnologyPanelArmTimer);
+      }
+      window.codexTechnologyPanelArmTimer = window.setTimeout(() => {
+        window.codexTechnologyPanelArmed = true;
+      }, TECHNOLOGY_GESTURE_QUIET_MS);
+    };
+
+    const holdTechnologyPanel = () => {
+      const technologyPanel = document.getElementById('technology');
+      if (!technologyPanel) return;
+
+      const y = Math.round(technologyPanel.getBoundingClientRect().top + window.scrollY);
+      const lenis = window.codexLenis;
+      if (lenis?.stop) lenis.stop();
+      if (lenis?.scrollTo) {
+        lenis.scrollTo(y, { immediate: true, force: true, lock: false });
+      }
+      window.scrollTo(0, y);
+      window.destinationTourActive = false;
+      activeJourneyIndexRef.current = -1;
+      setActiveJourneyIndex(-1);
+      setActiveSection(sections.length - 1);
+      window.ScrollTrigger?.update?.();
+
+      if (guardRestartTimer) clearTimeout(guardRestartTimer);
+      guardRestartTimer = setTimeout(() => {
+        if (!window.codexDestinationFlying && lenis?.start) lenis.start();
+      }, 320);
+    };
+
+    const releaseLock = (delay = 220, requireFreshWheel = false) => {
       if (cooldownTimer) clearTimeout(cooldownTimer);
       cooldownTimer = setTimeout(() => {
         isSnapping = false;
+        if (requireFreshWheel) {
+          extendFreshWheelGuard(900);
+        }
         const lenis = window.codexLenis;
         if (lenis?.start) lenis.start();
       }, delay);
+    };
+
+    const isFreshWheelGuarded = (direction) => {
+      if (direction <= 0) return false;
+      const technologyPanel = document.getElementById('technology');
+      const technologyIsCurrent = technologyPanel
+        && Math.abs(technologyPanel.getBoundingClientRect().top) <= 24
+        && !window.destinationTourActive;
+
+      const guardUntil = Math.max(
+        freshWheelGuardUntil,
+        window.codexTechnologyPanelHoldUntil || 0,
+      );
+      const isGuarded = performance.now() < guardUntil
+        || (technologyIsCurrent && window.codexTechnologyPanelArmed === false);
+      if (!isGuarded) return false;
+
+      // Trackpad momentum can keep sending wheel events after the snap lands.
+      // Extend the guard until that burst has gone quiet, then the next
+      // deliberate scroll is allowed to advance into the landmark tour.
+      extendFreshWheelGuard(280);
+      if (technologyIsCurrent) disarmTechnologyUntilQuiet();
+      holdTechnologyPanel();
+      return true;
     };
 
     const findCurrentPanelIdx = (panels) => {
@@ -481,6 +884,11 @@ export default function Content({ lenisRef }) {
       if (!panels.length) return false;
 
       const currentIdx = findCurrentPanelIdx(panels);
+      const activatePanelDestination = (panelIndex) => {
+        const destinationIndex = panelIndex - sections.length;
+        if (destinationIndex < 0 || destinationIndex >= destinations.length) return;
+        settleJourneyIndex(destinationIndex);
+      };
 
       // Above the first panel scrolling up — release to native scroll.
       if (currentIdx === -1 && direction < 0) return false;
@@ -492,18 +900,28 @@ export default function Content({ lenisRef }) {
       // At or past the last panel scrolling down — block the wheel event so
       // the user stays parked at the final landmark (WTC). Returning true
       // tells handleWheel to call preventDefault and stop the scroll.
-      if (targetIdx >= panels.length) return true;
+      if (targetIdx >= panels.length) {
+        activatePanelDestination(currentIdx);
+        return true;
+      }
 
       const target = panels[targetIdx];
       if (!target) return false;
+      const syncTargetPanel = () => activatePanelDestination(targetIdx);
+      const landingOnTechnology = targetIdx === sections.length - 1;
 
       isSnapping = true;
+      if (landingOnTechnology) {
+        extendFreshWheelGuard(TECHNOLOGY_SNAP_GUARD_MS);
+        disarmTechnologyUntilQuiet();
+      }
 
       // Defensive fallback: even with the isStopped check above, if Lenis
       // ever fails to fire onComplete (e.g. scroll target equals current
       // position), unstick the lock after the snap duration + buffer.
       const fallbackTimer = setTimeout(() => {
-        isSnapping = false;
+        syncTargetPanel();
+        releaseLock(landingOnTechnology ? 450 : 0, landingOnTechnology);
       }, 3000);
 
       if (lenis?.scrollTo) {
@@ -513,31 +931,70 @@ export default function Content({ lenisRef }) {
           lock: true,
           onComplete: () => {
             clearTimeout(fallbackTimer);
-            releaseLock(220);
+            syncTargetPanel();
+            releaseLock(landingOnTechnology ? 450 : 220, landingOnTechnology);
           },
         });
       } else {
         clearTimeout(fallbackTimer);
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        releaseLock(1500);
+        window.setTimeout(syncTargetPanel, 1500);
+        releaseLock(landingOnTechnology ? 1700 : 1500, landingOnTechnology);
       }
 
       return true;
     };
 
+    // Block scroll while a title is mid-exit OR mid-enter so the user
+    // can't compose two camera transitions on top of each other. The
+    // exit-then-snap path below is the only way to advance while a
+    // title is visible.
+    const isTitleBusy = () => {
+      const phase = titlePhaseRef.current;
+      return phase === 'exiting';
+    };
+
+    const requestSnap = (direction) => {
+      const phase = titlePhaseRef.current;
+      const visIdx = visibleTitleIndexRef.current;
+      if (phase === 'exiting') {
+        // Already exiting — last input wins. Replace pending without
+        // starting a second exit.
+        pendingActionRef.current = () => snapToPanel(direction);
+        return true;
+      }
+      if (visIdx >= 0 && (phase === 'visible' || phase === 'entering')) {
+        // Defer the snap until the current title has finished its
+        // out animation. handleTitleExitComplete invokes pendingActionRef.
+        pendingActionRef.current = () => snapToPanel(direction);
+        titlePhaseRef.current = 'exiting';
+        setTitlePhase('exiting');
+        return true;
+      }
+      return snapToPanel(direction);
+    };
+
     // CAPTURE PHASE — must fire BEFORE Lenis's bubble-phase listener,
     // otherwise Lenis's preventDefault locks the wheel event out of reach.
     const handleWheel = (e) => {
-      // Block scroll while a snap is mid-flight OR while the map camera
-      // is still flying — overlapping inputs cause flyTo cancellations
-      // that read as a double-jump transition.
-      if (isSnapping || window.codexDestinationFlying) {
+      // Block scroll while a snap is mid-flight, the map camera is still
+      // flying, or the title-out animation is in progress.
+      if (isSnapping || window.codexDestinationFlying || isTitleBusy()) {
         e.preventDefault();
         e.stopImmediatePropagation();
         return;
       }
 
       const now = performance.now();
+      if (Math.abs(e.deltaY) < 4) return;
+
+      const direction = e.deltaY > 0 ? 1 : -1;
+      if (isFreshWheelGuarded(direction)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+
       // One trackpad gesture fires many wheel events; treat the burst as one.
       if (now - lastWheelTime < 120) {
         e.preventDefault();
@@ -545,11 +1002,8 @@ export default function Content({ lenisRef }) {
         return;
       }
 
-      if (Math.abs(e.deltaY) < 4) return;
-
       lastWheelTime = now;
-      const direction = e.deltaY > 0 ? 1 : -1;
-      const consumed = snapToPanel(direction);
+      const consumed = requestSnap(direction);
 
       if (consumed) {
         e.preventDefault();
@@ -563,16 +1017,15 @@ export default function Content({ lenisRef }) {
 
     const handleTouchMove = (e) => {
       if (touchStartY == null) return;
-      if (isSnapping || window.codexDestinationFlying) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return;
-      }
-
       const delta = touchStartY - e.touches[0].clientY;
       if (Math.abs(delta) < 4) return;
 
       const direction = delta > 0 ? 1 : -1;
+      if (isSnapping || isFreshWheelGuarded(direction) || window.codexDestinationFlying || isTitleBusy()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (shouldBlockFinalPanelDownScroll(direction)) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -589,7 +1042,8 @@ export default function Content({ lenisRef }) {
       if (Math.abs(delta) < 40) return;
 
       const direction = delta > 0 ? 1 : -1;
-      snapToPanel(direction);
+      if (isSnapping || isFreshWheelGuarded(direction) || window.codexDestinationFlying || isTitleBusy()) return;
+      requestSnap(direction);
     };
 
     window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
@@ -603,17 +1057,36 @@ export default function Content({ lenisRef }) {
       window.removeEventListener('touchmove', handleTouchMove, { capture: true });
       window.removeEventListener('touchend', handleTouchEnd, { capture: true });
       if (cooldownTimer) clearTimeout(cooldownTimer);
+      if (guardRestartTimer) clearTimeout(guardRestartTimer);
+      if (window.codexTechnologyPanelArmTimer) {
+        window.clearTimeout(window.codexTechnologyPanelArmTimer);
+      }
     };
-  }, []);
+  }, [settleJourneyIndex]);
 
   /* ── Smooth scrollTo for side-nav clicks ────────────────── */
-  const scrollToElement = useCallback((target, offsetY = 0) => {
+  const scrollToElement = useCallback((target, offsetY = 0, onComplete) => {
     const lenis = lenisRef?.current || window.codexLenis;
+    let completed = false;
+    const complete = () => {
+      if (completed) return;
+      completed = true;
+      onComplete?.();
+    };
+
+    if (target?.getBoundingClientRect) {
+      const targetTop = target.getBoundingClientRect().top + offsetY;
+      if (Math.abs(targetTop) <= 2) {
+        window.requestAnimationFrame(complete);
+      }
+    }
+
     if (lenis?.scrollTo) {
       lenis.scrollTo(target, {
         offset: -offsetY,
         duration: 1.2,
         easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        onComplete: complete,
       });
       return;
     }
@@ -622,41 +1095,93 @@ export default function Content({ lenisRef }) {
       duration: 1.2,
       scrollTo: { y: target, offsetY },
       ease: 'power3.inOut',
+      onComplete: complete,
     });
   }, [lenisRef]);
 
   const scrollTo = useCallback((index) => {
     const panels = document.querySelectorAll('.panel-section');
     if (panels[index]) {
-      scrollToElement(panels[index], window.innerHeight * 0.15);
+      withTitleExit(() => scrollToElement(panels[index], window.innerHeight * 0.15));
     }
-  }, [scrollToElement]);
+  }, [scrollToElement, withTitleExit]);
 
   const scrollToJourney = useCallback((index) => {
     const target = document.getElementById(`destination-${destinations[index]?.id}`);
 
     if (target) {
-      scrollToElement(target, 0);
-      setIsJourneyMenuOpen(false);
+      withTitleExit(() => {
+        scrollToElement(target, 0, () => settleJourneyIndex(index));
+        setIsJourneyMenuOpen(false);
+      });
     }
-  }, [scrollToElement]);
+  }, [scrollToElement, settleJourneyIndex, withTitleExit]);
 
   const scrollToProjectsFinale = useCallback(() => {
     const target = document.getElementById('projects-finale');
-    if (target) {
+    if (!target) return;
+
+    withTitleExit(() => {
+      window.projectsFinaleTransitioning = true;
+      visibleTitleIndexRef.current = -1;
+      titlePhaseRef.current = 'hidden';
+      setVisibleTitleIndex(-1);
+      setTitlePhase('hidden');
+      activeJourneyIndexRef.current = -1;
+      setActiveJourneyIndex(-1);
+      setActiveSection(sections.length + destinations.length);
+      window.destinationTourActive = false;
+
+      let didScroll = false;
+      let fallbackTimer = null;
+
+      const clearDestinationTitle = () => {
+        visibleTitleIndexRef.current = -1;
+        titlePhaseRef.current = 'hidden';
+        setVisibleTitleIndex(-1);
+        setTitlePhase('hidden');
+        activeJourneyIndexRef.current = -1;
+        setActiveJourneyIndex(-1);
+      };
+
+      const releaseFinaleTransition = () => {
+        window.projectsFinaleTransitioning = false;
+        clearDestinationTitle();
+      };
+
+      const scrollAfterReady = () => {
+        if (didScroll) return;
+        didScroll = true;
+        window.removeEventListener('projectsFinaleReady', scrollAfterReady);
+        if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
+        window.requestAnimationFrame(() => {
+          ScrollTrigger.refresh();
+          window.requestAnimationFrame(() => {
+            const readyTarget = document.getElementById('projects-finale') || target;
+            const releaseTimer = window.setTimeout(releaseFinaleTransition, 1800);
+            scrollToElement(readyTarget, 0, () => {
+              window.clearTimeout(releaseTimer);
+              releaseFinaleTransition();
+            });
+          });
+        });
+      };
+
       window.projectsFinaleUnlocked = true;
       window.dispatchEvent(new Event('projectsFinaleUnlock'));
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => scrollToElement(target, 0));
-      });
-    }
-  }, [scrollToElement]);
+
+      if (window.projectsFinaleReady) {
+        scrollAfterReady();
+        return;
+      }
+
+      window.addEventListener('projectsFinaleReady', scrollAfterReady, { once: true });
+      fallbackTimer = window.setTimeout(scrollAfterReady, 700);
+    });
+  }, [scrollToElement, withTitleExit]);
 
   const journeyNavActive = activeSection >= sections.length;
-  const reducedMotionPreferred =
-    typeof window !== 'undefined'
-    && window.matchMedia
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 
   /* ── Render ──────────────────────────────────────────────── */
@@ -799,97 +1324,55 @@ export default function Content({ lenisRef }) {
       <div className="h-[70vh]" aria-hidden="true" />
 
       {/* ─── SECTION PANELS ───
-          Editorial typography over the live globe. Headline anchors
-          to the outer edge (same side as the existing pingpong-card
-          slot); microcopy sits at the opposite-bottom corner near the
-          globe. The globe tilt (window.globeTargetDirection) is
-          unchanged — only the type layout was redesigned. */}
-      {sections.map((sec, index) => {
-        const side = cardSide(index);
-        // Headline anchors outer edge; microcopy anchors opposite edge (near globe).
-        const headlinePos = side === 'right' ? 'right-[6vw]' : 'left-[6vw]';
-        const microcopyPos = side === 'right' ? 'left-[6vw]' : 'right-[6vw]';
-        const headlineAlign = side === 'right' ? 'text-right' : 'text-left';
-        const indentProp = side === 'right' ? 'paddingRight' : 'paddingLeft';
-
-        return (
-          <section
-            id={sec.id}
-            key={sec.id}
-            className="panel-section relative w-full overflow-visible"
-            style={{ minHeight: '100vh' }}
-            aria-labelledby={`${sec.id}-title`}
-          >
-            <div
-              className="pingpong-card pointer-events-none absolute inset-0 z-20"
-              style={{ willChange: 'transform, opacity' }}
-            >
-              {/* Huge editorial headline — top, outer edge */}
-              <h2
-                id={`${sec.id}-title`}
-                className={`stagger-item pointer-events-auto absolute top-[14vh] ${headlinePos} max-w-[88vw] font-sans font-light text-white leading-[0.92] tracking-[-0.04em] ${headlineAlign}`}
-                style={{ fontSize: 'clamp(56px, 11vw, 220px)' }}
-              >
-                {sec.headlineLines.map((line, i) => {
-                  const isLast = i === sec.headlineLines.length - 1;
-                  return (
-                    <span
-                      key={`${sec.id}-line-${i}`}
-                      className="block"
-                      style={{ [indentProp]: `${i}ch` }}
-                    >
-                      {line}
-                      {isLast && <span className="text-[#FF3B30]">.</span>}
-                    </span>
-                  );
-                })}
-              </h2>
-
-              {/* Microcopy block — bottom, opposite edge (near globe).
-                  Always text-left (ragged-right) regardless of which corner
-                  it lives in — matches the editorial reference. */}
-              <div
-                className={`stagger-item pointer-events-auto absolute bottom-[10vh] ${microcopyPos} flex w-[88vw] max-w-[300px] flex-col gap-4 text-left`}
-              >
-                <span className="font-mono text-[10px] uppercase tracking-[0.32em] text-white/60">
-                  {String(index + 1).padStart(2, '0')} — {sec.navLabel}
-                </span>
-                <p className="text-[12px] leading-[1.55] text-white sm:text-[13px]">
-                  {sec.summary}
-                </p>
-                <a
-                  href="#destination-colosseum"
-                  className="self-start font-sans text-[11px] text-white underline underline-offset-[5px] decoration-white/60 transition-colors hover:decoration-white"
-                >
-                  Archive Index
-                </a>
-              </div>
-            </div>
-          </section>
-        );
-      })}
+          Editorial typography over the live globe. Headline anchors to the
+          outer ping-pong edge; microcopy sits at the opposite-bottom corner
+          near the globe. Each section's words slide in / out word-by-word
+          via its own ScrollTrigger inside ContentSection. */}
+      {sections.map((sec, index) => (
+        <ContentSection
+          key={sec.id}
+          sec={sec}
+          index={index}
+          onActive={handleSectionEnter}
+          onLeave={handleSectionLeave}
+        />
+      ))}
 
       {destinations.map((destination, i) => {
         const isFinalDestination = destination.id === FINAL_DESTINATION_ID;
-        const isReady = reducedMotionPreferred || destinationReadySet.has(i);
-        const isFinalDestinationVisible = isFinalDestination && isReady;
+
+        // Reduced-motion path: skip the state machine and render the title
+        // statically inside each section (each section is viewport-tall, so
+        // only the one currently scrolled into view shows its title). For the
+        // normal-motion path the title is rendered once outside this map as
+        // a fixed viewport overlay — see the block right after this map.
+        const sectionPhase = reducedMotionPreferred
+          ? 'visible'
+          : (visibleTitleIndex === i ? titlePhase : 'hidden');
+
+        const isFinalDestinationVisible = isFinalDestination
+          && (sectionPhase === 'visible' || sectionPhase === 'entering');
 
         return (
-          // Scroll-target section for each landmark. The visible content is the
-          // LandmarkTitleCard overlay (Google Earth-style title + era range).
-          // The invisible .destination-card div is kept as GSAP's index target
-          // for the existing reveal/hide ScrollTrigger logic.
+          // Scroll-target section for each landmark. In normal motion the
+          // section is just a scroll anchor + WTC CTA host; the title overlay
+          // lives outside (so the pinned section's transform context can't
+          // strand it). Reduced motion keeps the title inside the section.
           <section
             id={`destination-${destination.id}`}
             key={destination.id}
             className="destination-section panel-section relative w-full overflow-visible"
             style={{ minHeight: '100vh' }}
           >
-            <LandmarkTitleCard
-              destination={destination}
-              deferReveal
-              ready={isReady}
-            />
+            {reducedMotionPreferred && (
+              <LandmarkTitleCard
+                destination={destination}
+                index={i}
+                phase={sectionPhase}
+                onEnterComplete={handleTitleEnterComplete}
+                onExitComplete={handleTitleExitComplete}
+              />
+            )}
             {isFinalDestination && (
               <div
                 className={`absolute bottom-[18vh] left-[6vw] z-30 transition-all duration-500 ease-out sm:bottom-[12vh] ${
@@ -911,14 +1394,25 @@ export default function Content({ lenisRef }) {
                 </button>
               </div>
             )}
-            <div
-              className="destination-card pointer-events-none absolute bottom-0 left-1/2 h-px w-px opacity-0"
-              style={{ willChange: 'transform, opacity', transform: 'translateX(-50%)' }}
-              aria-hidden="true"
-            />
           </section>
         );
       })}
+
+      {/* ─── Normal-motion title overlay ───
+          One LandmarkTitleCard at viewport-overlay scope, driven by the
+          state machine. Mounts when the camera has settled on a landmark,
+          unmounts after the exit animation. Rendering it outside any
+          destination-section avoids the ScrollTrigger-pin transform stack
+          (which can re-parent fixed children to the pin-spacer). */}
+      {!reducedMotionPreferred && visibleTitleIndex >= 0 && (
+        <LandmarkTitleCard
+          destination={destinations[visibleTitleIndex]}
+          index={visibleTitleIndex}
+          phase={titlePhase}
+          onEnterComplete={handleTitleEnterComplete}
+          onExitComplete={handleTitleExitComplete}
+        />
+      )}
 
       {/* ─── PROJECTS FINALE ───
           Closing 3D card stack (unveil.fr-style) shown after the 12 landmarks.
