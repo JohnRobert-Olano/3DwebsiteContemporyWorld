@@ -14,13 +14,13 @@ function App() {
   const lenisRef = useRef(null);
 
   useEffect(() => {
-    // Lenis Smooth Scroll Setup
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const lenis = new Lenis({
-      duration: 1.2,
+      duration: reducedMotion ? 0.01 : 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       direction: 'vertical',
       gestureDirection: 'vertical',
-      smooth: true,
+      smooth: !reducedMotion,
       mouseMultiplier: 1,
       smoothTouch: false,
       touchMultiplier: 2,
@@ -78,7 +78,7 @@ function App() {
   };
 
   return (
-    <main className="relative w-full min-h-screen bg-[#080808] text-white overflow-x-hidden font-sans">
+    <main className="relative min-h-[100dvh] w-full overflow-x-hidden bg-bg text-white font-sans">
       <AnimatePresence>
         {introActive && (
           <IntroSequence key="intro" onComplete={handleIntroComplete} />
@@ -106,22 +106,21 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Navbar (Minimalist Tech) */}
-      <nav className="fixed top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-auto" aria-label="Primary navigation">
-        <div className="glass px-6 py-2.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-2xl flex items-center gap-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <nav className="fixed left-1/2 top-4 z-50 w-[min(92vw,46rem)] -translate-x-1/2 pointer-events-auto sm:top-5" aria-label="Primary navigation">
+        <div className="glass grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-full px-3 py-2 sm:px-4">
           <a
             href="/"
             onClick={handleHomeClick}
-            className="text-[10px] uppercase tracking-[0.25em] font-bold text-white hover:text-primary transition-colors cursor-pointer"
+            className="rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-primary focus-visible:outline-primary"
           >
-            Index
+            World View
           </a>
-          <div className="w-px h-3 bg-white/10" />
+          <div className="hidden h-px bg-white/[0.12] sm:block" aria-hidden="true" />
           <a
             href="#culture"
-            className="text-[10px] uppercase tracking-[0.25em] text-muted hover:text-white transition-colors cursor-pointer"
+            className="justify-self-end rounded-full px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted transition-colors hover:text-white focus-visible:outline-primary sm:justify-self-auto"
           >
-            Archive
+            Topics
           </a>
         </div>
       </nav>

@@ -179,7 +179,7 @@ export default function IntroSequence({ onComplete }) {
            opacity={subtitleOpacity}
            style={{ textTransform: 'uppercase' }}
         >
-          Perspective // Access
+          Perspective Access
         </text>
       </svg>
 

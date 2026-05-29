@@ -1,13 +1,13 @@
 // ─── Map Camera HUD ────────────────────────────────────────────────────────
 // Live read-out of Mapbox camera state (lng, lat, zoom, pitch, bearing, alt).
 // Subtle developer-style overlay pinned to the top-left of the viewport.
-// Self-contained — to remove, delete this file and the <MapHud /> usage in
+// Self-contained - to remove, delete this file and the <MapHud /> usage in
 // MapboxEarth.jsx. It only listens to map events and never mutates the map.
 // ──────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react';
 
 function formatNumber(value, digits) {
-  return Number.isFinite(value) ? value.toFixed(digits) : '—';
+  return Number.isFinite(value) ? value.toFixed(digits) : 'N/A';
 }
 
 function formatAltitude(altitudeMeters, zoom) {
@@ -28,7 +28,7 @@ function readCameraAltitude(map) {
       return position.toAltitude();
     }
   } catch {
-    // Free camera not available on every projection / version — fall through.
+    // Free camera not available on every projection / version - fall through.
   }
   return null;
 }
@@ -83,30 +83,30 @@ export default function MapHud({ map }) {
 
   return (
     <div
-      className="pointer-events-none fixed left-4 top-4 z-50 select-none tech-border bg-black/40 px-3 py-2 font-mono text-[9px] leading-tight text-white/90 shadow-2xl backdrop-blur-xl"
+      className="pointer-events-none fixed left-4 top-4 z-50 hidden select-none rounded-[6px] border border-white/[0.10] bg-bg/[0.58] px-3 py-2 font-mono text-[9px] leading-tight text-white/90 shadow-2xl backdrop-blur-xl lg:block"
       style={{ fontVariantNumeric: 'tabular-nums' }}
       aria-hidden="true"
     >
-      <div className="mb-2 border-b border-white/5 pb-1 text-[8px] uppercase tracking-[0.3em] text-primary font-bold">
-        Telemeter // Access
+      <div className="mb-2 border-b border-white/[0.08] pb-1 text-[8px] font-bold uppercase tracking-[0.22em] text-primary">
+        Camera state
       </div>
       <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1">
-        <span className="text-muted">LNG</span>
+        <span className="text-muted">Lon</span>
         <span>{formatNumber(stats.lng, 5)}</span>
 
-        <span className="text-muted">LAT</span>
+        <span className="text-muted">Lat</span>
         <span>{formatNumber(stats.lat, 5)}</span>
 
-        <span className="text-muted">ZOM</span>
+        <span className="text-muted">Zoom</span>
         <span>{formatNumber(stats.zoom, 2)}</span>
 
-        <span className="text-muted">PIT</span>
+        <span className="text-muted">Pitch</span>
         <span>{formatNumber(stats.pitch, 1)}°</span>
 
-        <span className="text-muted">BRG</span>
+        <span className="text-muted">Bear</span>
         <span>{formatNumber(stats.bearing, 1)}°</span>
 
-        <span className="text-muted">ALT</span>
+        <span className="text-muted">Alt</span>
         <span>{formatAltitude(stats.altitude, stats.zoom)}</span>
       </div>
     </div>

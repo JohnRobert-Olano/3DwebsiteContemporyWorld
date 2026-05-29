@@ -1,33 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 export default function ScrollProgress() {
-  const [progress, setProgress] = useState(0);
+  const barRef = useRef(null);
 
   useEffect(() => {
-    let rafPending = false;
+    gsap.registerPlugin(ScrollTrigger);
+    const bar = barRef.current;
+    if (!bar) return undefined;
 
-    const compute = () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
-      const docHeight =
-        (document.documentElement.scrollHeight || 0) - window.innerHeight;
-      const p = docHeight > 0 ? Math.min(1, Math.max(0, scrollTop / docHeight)) : 0;
-      setProgress(p);
-      rafPending = false;
-    };
-
-    const onScroll = () => {
-      if (rafPending) return;
-      rafPending = true;
-      requestAnimationFrame(compute);
-    };
-
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    compute();
+    gsap.set(bar, { scaleX: 0 });
+    const trigger = ScrollTrigger.create({
+      start: 0,
+      end: 'max',
+      onUpdate: (self) => {
+        gsap.set(bar, { scaleX: self.progress });
+      },
+    });
 
     return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      trigger.kill();
     };
   }, []);
 
@@ -37,9 +30,9 @@ export default function ScrollProgress() {
       aria-hidden="true"
     >
       <div
+        ref={barRef}
         className="h-full origin-left bg-primary"
         style={{
-          transform: `scaleX(${progress})`,
           boxShadow: '0 0 12px var(--color-primary)',
           willChange: 'transform',
         }}

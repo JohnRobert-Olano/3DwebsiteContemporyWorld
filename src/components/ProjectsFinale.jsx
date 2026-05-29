@@ -9,7 +9,7 @@ gsap.registerPlugin(ScrollTrigger);
 const PROJECT_COUNT = projects.length;
 
 // Diagonal unveil-style stack: lower-left cards are closer, upper-right cards recede.
-// The reference (unveil.fr) uses flat upright panes stepped along a diagonal —
+// The reference (unveil.fr) uses flat upright panes stepped along a diagonal -
 // only gentle Y yaw + tiny X pitch, NO Z roll. A non-zero rotateZ makes the
 // cards look like parallelograms/diamonds, which is the look we want to avoid.
 const STEP_X_VW = 8.25;
@@ -26,7 +26,7 @@ const CARD_ASPECT = '1 / 1';
 const VISIBLE_RADIUS = 9;
 // Hover: pull the active cover out of the stack to the right, lift it toward
 // the viewer, and scale it slightly so the artwork can be inspected.
-// toward the viewer, and scale it slightly — together this reads as the
+// toward the viewer, and scale it slightly - together this reads as the
 const HOVER_SHIFT_X_PX = 150;
 const HOVER_SHIFT_Y_PX = -42;
 const HOVER_LIFT_Z_PX = 360;
@@ -52,7 +52,7 @@ const NOISE_TEXTURE =
   'url("data:image/svg+xml,%3Csvg viewBox=%270 0 220 220%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.85%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23n)%27 opacity=%270.038%27/%3E%3C/svg%3E")';
 
 // Single fallback for when the project image fails to load. The covers in the
-// reference (unveil.fr) are full-bleed images on translucent glass panes —
+// reference (unveil.fr) are full-bleed images on translucent glass panes -
 // per-card color treatments are intentionally removed.
 const FALLBACK_PAPER_BG = 'linear-gradient(155deg, rgba(20,20,22,0.85) 0%, rgba(10,10,12,0.95) 100%)';
 const LABEL_DARK = 'rgba(255,255,255,0.84)';
@@ -67,10 +67,6 @@ const TEXT_FIXES = [
 
 function wrapIndex(index, length = PROJECT_COUNT) {
   return ((index % length) + length) % length;
-}
-
-function pad2(index) {
-  return String(index + 1).padStart(2, '0');
 }
 
 function cleanText(value) {
@@ -103,7 +99,7 @@ function buildVirtualCards() {
 
 const VIRTUAL_CARDS = buildVirtualCards();
 
-function ProjectCover({ project, index }) {
+function ProjectCover({ project }) {
   const [imageFailed, setImageFailed] = useState(false);
   const title = cleanText(project.title);
   const role = cleanText(project.role);
@@ -111,7 +107,7 @@ function ProjectCover({ project, index }) {
 
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-      {/* Primary image — fills the card; slight translucency mimics the
+      {/* Primary image - fills the card; slight translucency mimics the
           glass-pane stack in the unveil reference. */}
       {!useFallback && (
         <img
@@ -127,7 +123,7 @@ function ProjectCover({ project, index }) {
         />
       )}
 
-      {/* Fallback panel — gallery-card off-white with project title + role.
+      {/* Fallback panel - gallery-card off-white with project title + role.
           Used only when the underlying image asset fails to load. */}
       {useFallback && (
         <div
@@ -157,30 +153,20 @@ function ProjectCover({ project, index }) {
         </div>
       )}
 
-      {/* Tiny corner labels — index top-left, year bottom-right. Tone
-          only render for fallback covers so supplied artwork stays clean. */}
       {useFallback && (
-        <>
-          <div
-            className="absolute left-4 top-3 font-mono text-[9px] uppercase tracking-[0.32em]"
-            style={{ color: LABEL_DARK, textShadow: 'none' }}
-          >
-            {pad2(index)}
-          </div>
-          <div
-            className="absolute bottom-3 right-4 font-mono text-[9px] uppercase tracking-[0.28em]"
-            style={{ color: LABEL_DARK, textShadow: 'none' }}
-          >
-            {project.year}
-          </div>
-        </>
+        <div
+          className="absolute right-4 top-3 font-mono text-[9px] uppercase tracking-[0.24em]"
+          style={{ color: LABEL_DARK, textShadow: 'none' }}
+        >
+          {project.year}
+        </div>
       )}
     </div>
   );
 }
 
 function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
-  const { project, realIndex, sequenceIndex } = card;
+  const { project, sequenceIndex } = card;
   const [isHovered, setIsHovered] = useState(false);
   const distance = Math.abs(sequenceIndex - activeSequenceIndex);
   const isActive = sequenceIndex === activeSequenceIndex;
@@ -234,13 +220,13 @@ function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
           willChange: 'transform',
         }}
       >
-        <ProjectCover project={project} index={realIndex} />
+        <ProjectCover project={project} />
       </span>
     </button>
   );
 }
 
-function GridCard({ project, index, onOpen }) {
+function GridCard({ project, onOpen }) {
   const [isHovered, setIsHovered] = useState(false);
   return (
     <button
@@ -266,7 +252,7 @@ function GridCard({ project, index, onOpen }) {
         willChange: 'transform',
       }}
     >
-      <ProjectCover project={project} index={index} />
+      <ProjectCover project={project} />
     </button>
   );
 }
@@ -278,7 +264,6 @@ function FullscreenView({ project, onClose, reducedMotion }) {
   const role = cleanText(project.role);
   const title = cleanText(project.title);
   const blurb = cleanText(project.blurb);
-  const projectIndex = Math.max(0, projects.indexOf(project));
 
   return (
     <motion.div
@@ -324,7 +309,7 @@ function FullscreenView({ project, onClose, reducedMotion }) {
           type="button"
           onClick={onClose}
           aria-label="Close project"
-          className="absolute right-4 top-4 z-10 cursor-pointer rounded-full p-2 outline-none transition-colors hover:bg-white hover:text-black focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="absolute right-4 top-4 z-10 cursor-pointer rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] outline-none transition-colors hover:bg-white hover:text-bg focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             border: `1px solid ${BORDER_CARD}`,
             background: 'rgba(255, 255, 255, 0.05)',
@@ -333,20 +318,10 @@ function FullscreenView({ project, onClose, reducedMotion }) {
             outlineColor: FOCUS_RING,
           }}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          Close
         </button>
         <div className="relative aspect-square w-full overflow-hidden">
-          <ProjectCover project={project} index={projectIndex} />
+          <ProjectCover project={project} />
         </div>
         <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[1fr_auto] md:p-10">
           <div>
@@ -595,15 +570,15 @@ export default function ProjectsFinale() {
       className={`panel-section relative w-full overflow-hidden transition-opacity duration-300 ${
         isUnlocked ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
       }`}
-      style={{ minHeight: '100vh', background: BG_GALLERY }}
-      aria-label="Projects finale"
+      style={{ minHeight: '100dvh', background: BG_GALLERY }}
+      aria-label="Article archive"
       aria-hidden={!isUnlocked}
     >
       {isUnlocked && (
         <>
           <div className="pointer-events-none absolute left-[6vw] top-[8vh] z-30 max-w-[82vw] sm:max-w-[56vw] lg:max-w-[38vw]">
             <p
-              className="font-mono text-[10px] uppercase tracking-[0.3em]"
+              className="font-mono text-[10px] uppercase tracking-[0.24em]"
               style={{ color: TEXT_MUTED }}
             >
               <span
@@ -611,18 +586,13 @@ export default function ProjectsFinale() {
                 style={{ background: TEXT_MUTED }}
                 aria-hidden="true"
               />
-              Projects Finale
+              Article archive
             </p>
-            <div className="mt-4 flex items-baseline gap-3 font-mono">
-              <span className="text-2xl font-semibold" style={{ color: TEXT_DARK }}>
-                {pad2(activeIndex)}
-              </span>
-              <span className="text-base" style={{ color: TEXT_MUTED }}>
-                / {String(PROJECT_COUNT).padStart(2, '0')}
-              </span>
+            <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em]" style={{ color: TEXT_MUTED }}>
+              {PROJECT_COUNT} visual essays
             </div>
             <h2
-              className="mt-3 text-3xl font-bold leading-tight tracking-normal sm:text-4xl lg:text-5xl"
+              className="mt-3 text-3xl font-semibold leading-tight tracking-normal sm:text-4xl lg:text-5xl"
               style={{ color: TEXT_DARK, letterSpacing: 0, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}
             >
               {cleanText(activeProject.title)}
@@ -664,11 +634,10 @@ export default function ProjectsFinale() {
           {!useStack && (
             <div className="absolute inset-0 overflow-y-auto px-[6vw] pb-[16vh] pt-[34vh]">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {projects.map((project, index) => (
+                {projects.map((project) => (
                   <GridCard
                     key={project.id}
                     project={project}
-                    index={index}
                     onOpen={setFullscreen}
                   />
                 ))}
@@ -698,14 +667,14 @@ export default function ProjectsFinale() {
                     aria-label={`Switch to ${viewMode.toLowerCase()} view`}
                     className={`rounded-full px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.28em] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                       active
-                        ? 'text-black'
+                        ? 'text-bg'
                         : disabled
                           ? 'cursor-not-allowed'
                           : 'cursor-pointer hover:text-white'
                     }`}
                     style={{
-                      background: active ? '#ffffff' : 'transparent',
-                      color: active ? '#000000' : disabled ? TEXT_MUTED : TEXT_META,
+                      background: active ? 'rgba(255,255,255,0.94)' : 'transparent',
+                      color: active ? 'var(--bg)' : disabled ? TEXT_MUTED : TEXT_META,
                       outlineColor: FOCUS_RING,
                     }}
                   >

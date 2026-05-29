@@ -15,8 +15,8 @@ import {
 } from '../lib/cesium/cameraController';
 
 const ROME_SLIDE = {
-  tag: '01 // ARCHIVE',
-  subTitle: 'Segment // Rome',
+  tag: 'Field note',
+  subTitle: 'Rome descent',
   title: 'Colosseum',
   summary:
     'Ancient Roman amphitheater, the largest ever built. It anchors the transition from the Rome descent into the global destination journey.',
@@ -34,6 +34,42 @@ const EARTH_IDLE_CENTER = [12.4922, 22];
 const EARTH_OVERVIEW_ZOOM = 1.12;
 const EARTH_ROTATION_DEGREES_PER_SECOND = 0.82;
 const EARTH_MOTION_EASE = 0.0055;
+
+function SetupErrorState({ message }) {
+  return (
+    <section
+      className="fixed inset-0 z-30 flex items-center justify-center px-5 py-24"
+      aria-labelledby="setup-error-title"
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(242,109,91,0.16),transparent_32%),linear-gradient(180deg,rgba(5,7,14,0.28),rgba(5,7,14,0.82))]" />
+      <article className="relative w-full max-w-2xl rounded-[8px] border border-white/[0.12] bg-bg/[0.78] p-6 text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl sm:p-8">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
+          Globe setup paused
+        </p>
+        <h2
+          id="setup-error-title"
+          className="mt-4 font-display text-3xl font-semibold leading-tight tracking-normal sm:text-4xl"
+        >
+          The 3D Earth needs two local environment variables.
+        </h2>
+        <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/[0.76] sm:text-base">
+          Add the required keys to your local or deployment environment, then restart the Vite server. The site keeps the keys out of the client UI.
+        </p>
+        <div className="mt-6 grid gap-2 font-mono text-[11px] uppercase tracking-[0.16em] text-white sm:grid-cols-2">
+          <code className="rounded-[5px] border border-white/[0.10] bg-white/[0.06] px-3 py-3">
+            VITE_GOOGLE_MAPS_API_KEY
+          </code>
+          <code className="rounded-[5px] border border-white/[0.10] bg-white/[0.06] px-3 py-3">
+            VITE_CESIUM_ION_TOKEN
+          </code>
+        </div>
+        <p className="mt-5 text-xs leading-relaxed text-white/[0.58]">
+          Current check: {message}
+        </p>
+      </article>
+    </section>
+  );
+}
 
 // Mapbox-shaped keyframes kept unchanged so visual tuning notes from the
 // original component still apply 1:1. They are converted to Cesium poses at
@@ -56,7 +92,7 @@ const DESTINATION_VIEW_OVERRIDES = {
   'saint-peters-basilica': { zoom: 17.57, pitch: 72.7, bearing: 313.7, altitude: 0 },
   // Xi'an falls in Google's photogrammetry coverage gap (no 3D mesh for any
   // Chinese city). At ground level the wall reads as flat satellite imagery,
-  // so frame it as an oblique aerial instead — the full ~3.4 km × 2.6 km
+  // so frame it as an oblique aerial instead - the full ~3.4 km × 2.6 km
   // rectangular fortification + moat is unmistakable from this altitude.
   'xian-city-wall': { zoom: 14, pitch: 45, bearing: 0 },
   'royal-palace-madrid': { zoom: 15.87, pitch: 73.9, bearing: 334.6, altitude: 0 },
@@ -68,7 +104,7 @@ const DESTINATION_VIEW_OVERRIDES = {
   'world-trade-center-nyc': { zoom: 16.37, pitch: 61.6, bearing: 54.7, altitude: 0 },
   'san-salvador-island': { zoom: 11.38, pitch: 46.6, bearing: 334.8, altitude: 0 },
   // Original Mapbox pitch was 85 (near-horizon). At Cesium height 280 m this
-  // would clip the camera into terrain — pulled back to pitch 75 / zoom 17.5
+  // would clip the camera into terrain - pulled back to pitch 75 / zoom 17.5
   // to keep the photogrammetry in frame. Re-tune in dev if needed.
   'magellan-landing-site': { zoom: 17.25, pitch: 67.6, bearing: 260.9, altitude: 0 },
 };
@@ -145,7 +181,7 @@ function applyDestinationTourState(viewer, tourState, codex) {
   if (!destination) return;
 
   // Re-entering the same landmark (e.g., scroll back into the pin): hold the
-  // current view — don't re-fire flyTo.
+  // current view - don't re-fire flyTo.
   if (codex.destinationActiveIndex === tourState.index) return;
   codex.destinationActiveIndex = tourState.index;
 
@@ -225,7 +261,7 @@ function buildEarthIdleDriver() {
     const bobbing = Math.sin(timeInSeconds * 1.5) * 1.5;
     const banking = horizontalDirection * -12;
 
-    // Cesium has no "padding" — we mimic the off-center framing by nudging the
+    // Cesium has no "padding" - we mimic the off-center framing by nudging the
     // target longitude proportional to the lean direction. Empirical 6° push
     // approximates the Mapbox padding offset without distorting the view.
     const lonOffset = horizontalDirection * 6;
@@ -238,7 +274,7 @@ function buildEarthIdleDriver() {
         : Math.min(2.25, Math.max(1.75, window.innerWidth * 0.00125));
     const dynamicZoom = baseZoom + (idleZoom - baseZoom) * Math.abs(horizontalDirection);
 
-    // Altitude doesn't matter at globe range — target is millions of meters
+    // Altitude doesn't matter at globe range - target is millions of meters
     // from camera. Use 0.
     const pose = poseFromMapbox({
       center: [wrapLongitude(spinLng + lonOffset), EARTH_IDLE_CENTER[1] + bobbing],
@@ -292,7 +328,7 @@ export default function CesiumEarth() {
       fullscreenButton: false,
       infoBox: false,
       selectionIndicator: false,
-      // The default Cesium globe is replaced by Google's 3D tileset — no
+      // The default Cesium globe is replaced by Google's 3D tileset - no
       // imagery layer needed. We still keep the globe ellipsoid alive for
       // SceneTransforms math but hide it.
       baseLayer: false,
@@ -318,7 +354,7 @@ export default function CesiumEarth() {
 
     viewerRef.current = viewer;
 
-    // Per-viewer codex state — mirrors what MapboxEarth stashed on the
+    // Per-viewer codex state - mirrors what MapboxEarth stashed on the
     // map object so the rest of the architecture has its expected hooks.
     const codex = {
       userInteracting: false,
@@ -356,9 +392,9 @@ export default function CesiumEarth() {
 
     // ── window.codexMap shim ────────────────────────────────────────────────
     // Provides the four methods Content.jsx and MapHud.jsx rely on:
-    //   project([lon, lat]) — for the Colosseum SVG connector lines.
-    //   getCenter / getZoom / getPitch / getBearing — for MapHud readout.
-    //   on / off — MapHud subscribes to move/zoom/rotate/pitch; we coalesce
+    //   project([lon, lat]) - for the Colosseum SVG connector lines.
+    //   getCenter / getZoom / getPitch / getBearing - for MapHud readout.
+    //   on / off - MapHud subscribes to move/zoom/rotate/pitch; we coalesce
     //     all four onto Cesium's single camera.changed event.
     const cameraChangedListeners = new Set();
     const onCameraChanged = () => {
@@ -426,7 +462,7 @@ export default function CesiumEarth() {
         // landmark's high-detail meshes resident after the first visit.
         tileset.cacheBytes = 1_500_000_000;
         tileset.maximumCacheOverflowBytes = 500_000_000;
-        // Both default true — explicit so a future Cesium version doesn't
+        // Both default true - explicit so a future Cesium version doesn't
         // silently flip them off. preloadFlightDestinations is the big one
         // for us: during a flyTo, Cesium starts traversing the *destination*
         // viewpoint before the camera arrives, so the landing frame is
@@ -451,7 +487,7 @@ export default function CesiumEarth() {
         tileset.foveatedTimeDelay = 0.2;            // delay peripheral high-detail loads
         tileset.maximumScreenSpaceError = 16;       // default; lower = sharper but slower
 
-        // Streaming indicator — debounce so brief loads don't flash the badge.
+        // Streaming indicator - debounce so brief loads don't flash the badge.
         const updateStreamingState = () => {
           if (!tileset) return;
           const pending = tileset.statistics.numberOfPendingRequests
@@ -474,7 +510,7 @@ export default function CesiumEarth() {
         // returning the actual surface height. One-time cost, ~1-3 s after
         // tileset ready. Until it resolves, landmark targets fall back to
         // 100 m which is fine for coastal cities but underground for places
-        // like Xi'an or Neuschwanstein — those flights look wrong on the
+        // like Xi'an or Neuschwanstein - those flights look wrong on the
         // very first visit then correct themselves on subsequent flights.
         const sampleTargets = [
           { id: 'EARTH_IDLE', lon: EARTH_IDLE_CENTER[0], lat: EARTH_IDLE_CENTER[1] },
@@ -688,7 +724,7 @@ export default function CesiumEarth() {
      Cesium has no Mapbox-style camera padding. To position the
      visible globe on the left/right of the viewport during the
      ping-pong sections, translate the outer container via CSS.
-     The camera logic (tilt/zoom/longitude nudge) is untouched —
+     The camera logic (tilt/zoom/longitude nudge) is untouched -
      this only shifts the rendered output.
      Suppressed during Rome descent and destination tour so those
      framings remain centered on their targets. */
@@ -741,20 +777,13 @@ export default function CesiumEarth() {
       <MapHud map={hudShim} />
 
       {(tilesStreaming || !tilesVisualReady) && !initialSetupError && (
-        <div className="pointer-events-none fixed bottom-3 right-3 z-40 flex items-center gap-2 rounded-md border border-white/15 bg-black/60 px-3 py-1.5 text-[11px] font-mono uppercase tracking-[0.18em] text-white/80 shadow-lg backdrop-blur-md">
-          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#0A6ED3]" />
+        <div className="pointer-events-none fixed bottom-3 right-3 z-40 flex items-center gap-2 rounded-full border border-white/[0.14] bg-bg/[0.68] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-white/80 shadow-lg backdrop-blur-md">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
           {tilesVisualReady ? 'Loading 3D tiles' : 'Preparing 3D Earth'}
         </div>
       )}
 
-      {initialSetupError && (
-        <div className="fixed left-1/2 top-24 z-50 w-[min(90vw,32rem)] -translate-x-1/2 rounded-lg border border-red-500/40 bg-black/80 p-4 text-sm text-white shadow-2xl backdrop-blur-xl">
-          <p className="font-semibold uppercase tracking-[0.16em] text-red-300">
-            Cesium setup issue
-          </p>
-          <p className="mt-2 text-gray-200">{initialSetupError}</p>
-        </div>
-      )}
+      {initialSetupError && <SetupErrorState message={initialSetupError} />}
 
       <SlidePanel
         open={showRomeSlide}

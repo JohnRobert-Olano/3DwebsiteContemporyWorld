@@ -3,18 +3,18 @@ import { createPortal } from 'react-dom';
 import { gsap } from 'gsap';
 
 // Overlay rendered inside each destination section. The card is a
-// phase-driven state machine — Content.jsx tells it when to enter / exit so
+// phase-driven state machine - Content.jsx tells it when to enter / exit so
 // the in/out animations stay synchronized with the Cesium camera flights.
 //
 // Layout matches the Google Earth Studio reference: landmark name top-left,
-// decorative "— Discover more" sub-line below, large outlined era-range text
-// centered. Next-landmark preview is intentionally omitted (locked decision).
+// location sub-line below, large outlined era-range text centered.
+// Next-landmark preview is intentionally omitted (locked decision).
 //
 // Phases:
-//   hidden   — text fully invisible, no transitions running.
-//   entering — words staggered into view; fires onEnterComplete on settle.
-//   visible  — words held in their in-frame state.
-//   exiting  — words staggered out of view; fires onExitComplete on settle.
+//   hidden   - text fully invisible, no transitions running.
+//   entering - words staggered into view; fires onEnterComplete on settle.
+//   visible  - words held in their in-frame state.
+//   exiting  - words staggered out of view; fires onExitComplete on settle.
 function prefersReducedMotion() {
   return typeof window !== 'undefined'
     && window.matchMedia
@@ -23,7 +23,7 @@ function prefersReducedMotion() {
 
 // Split a string into ordered word / whitespace tokens so each word gets its
 // own inline-block span (for GSAP per-word staggering) while whitespace stays
-// as plain text — no layout reflow, no broken kerning between words.
+// as plain text - no layout reflow, no broken kerning between words.
 function tokenizeText(text) {
   if (!text) return [];
   return String(text)
@@ -66,7 +66,7 @@ export default function LandmarkTitleCard({
 
   const nameTokens = useMemo(() => tokenizeText(destination.name), [destination.name]);
   const eraTokens = useMemo(() => tokenizeText(destination.eraRange), [destination.eraRange]);
-  const discoverTokens = useMemo(() => tokenizeText('Discover more'), []);
+  const locationTokens = useMemo(() => tokenizeText(destination.location), [destination.location]);
 
   useEffect(() => {
     const backdrop = backdropRef.current;
@@ -201,7 +201,7 @@ export default function LandmarkTitleCard({
   // viewport overlay so its stacking context can't be trapped behind the
   // pinned destination section or the Cesium canvas. Reduced-motion paths
   // (no ScrollTrigger / state machine) keep the original in-section layout
-  // — only the section currently in the viewport shows its title.
+  // - only the section currently in the viewport shows its title.
   const reduced = prefersReducedMotion();
   const useFixed = !reduced;
   const containerClass = useFixed
@@ -236,7 +236,7 @@ export default function LandmarkTitleCard({
       <div className="absolute left-[6vw] top-[14vh] max-w-[60vw]">
         <h1
           ref={nameContainerRef}
-          className="font-display text-5xl font-bold uppercase tracking-tight text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)] sm:text-6xl lg:text-7xl"
+          className="font-display text-4xl font-bold uppercase tracking-normal text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)] sm:text-6xl lg:text-7xl"
           aria-label={destination.name}
         >
           <span aria-hidden="true">{renderWordTokens(nameTokens)}</span>
@@ -246,21 +246,21 @@ export default function LandmarkTitleCard({
           className="mt-3 flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-white/85"
           aria-hidden="true"
         >
-          {/* Decorative leading line — tagged `.split-word` so it slides
+          {/* Decorative leading line - tagged `.split-word` so it slides
               in/out with the two text words and no element pops between
               the title phases. */}
           <span
             className="split-word inline-block h-px w-6 bg-white/85"
             style={{ willChange: 'transform, opacity' }}
           />
-          <span>{renderWordTokens(discoverTokens)}</span>
+          <span>{renderWordTokens(locationTokens)}</span>
         </div>
       </div>
 
       <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-6">
         <span
           ref={eraContainerRef}
-          className="landmark-era text-5xl tracking-tight sm:text-6xl md:text-7xl lg:text-8xl"
+          className="landmark-era text-4xl tracking-normal sm:text-6xl md:text-7xl lg:text-8xl"
           aria-label={destination.eraRange}
         >
           <span aria-hidden="true">{renderWordTokens(eraTokens)}</span>
