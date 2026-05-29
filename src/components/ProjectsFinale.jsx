@@ -3,6 +3,8 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AnimatePresence, motion } from 'framer-motion';
 import { projects } from '../lib/data/projects';
+import AlbumGameShell from './games/AlbumGameShell';
+import { gameRegistry } from './games/gameRegistry';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -264,6 +266,8 @@ function FullscreenView({ project, onClose, reducedMotion }) {
   const role = cleanText(project.role);
   const title = cleanText(project.title);
   const blurb = cleanText(project.blurb);
+  const gameMeta = gameRegistry[project.id];
+  const GameComponent = gameMeta?.Component;
 
   return (
     <motion.div
@@ -280,10 +284,11 @@ function FullscreenView({ project, onClose, reducedMotion }) {
       aria-label={title}
     >
       <motion.div
-        className="relative z-[81] flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)]"
+        className="relative z-[81] flex max-h-full w-full flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)]"
         style={{
+          maxWidth: gameMeta ? 'min(1480px, calc(100vw - 2rem))' : '64rem',
           transformOrigin: 'center center',
-          background: 'rgba(18, 18, 18, 0.82)',
+          background: gameMeta ? 'rgba(13, 13, 13, 0.98)' : 'rgba(18, 18, 18, 0.82)',
           backdropFilter: 'blur(24px)',
           border: `1px solid ${BORDER_CARD}`,
         }}
@@ -320,57 +325,65 @@ function FullscreenView({ project, onClose, reducedMotion }) {
         >
           Close
         </button>
-        <div className="relative aspect-square w-full overflow-hidden">
-          <ProjectCover project={project} />
-        </div>
-        <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[1fr_auto] md:p-10">
-          <div>
-            <div
-              className="font-mono text-[10px] uppercase tracking-[0.3em]"
-              style={{ color: TEXT_MUTED }}
-            >
-              {role}
+        {GameComponent ? (
+          <AlbumGameShell project={project} gameMeta={gameMeta}>
+            <GameComponent project={project} reducedMotion={reducedMotion} />
+          </AlbumGameShell>
+        ) : (
+          <>
+            <div className="relative aspect-square w-full overflow-hidden">
+              <ProjectCover project={project} />
             </div>
-            <h3
-              className="mt-3 text-3xl font-bold tracking-normal md:text-4xl"
-              style={{ color: TEXT_DARK, letterSpacing: 0 }}
-            >
-              {title}
-            </h3>
-            <p
-              className="mt-5 max-w-prose text-sm leading-relaxed md:text-base"
-              style={{ color: TEXT_META }}
-            >
-              {blurb}
-            </p>
-          </div>
-          <div className="flex flex-col items-start gap-3 md:items-end">
-            <div
-              className="font-mono text-[10px] uppercase tracking-[0.3em]"
-              style={{ color: TEXT_MUTED }}
-            >
-              Year
+            <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[1fr_auto] md:p-10">
+              <div>
+                <div
+                  className="font-mono text-[10px] uppercase tracking-[0.3em]"
+                  style={{ color: TEXT_MUTED }}
+                >
+                  {role}
+                </div>
+                <h3
+                  className="mt-3 text-3xl font-bold tracking-normal md:text-4xl"
+                  style={{ color: TEXT_DARK, letterSpacing: 0 }}
+                >
+                  {title}
+                </h3>
+                <p
+                  className="mt-5 max-w-prose text-sm leading-relaxed md:text-base"
+                  style={{ color: TEXT_META }}
+                >
+                  {blurb}
+                </p>
+              </div>
+              <div className="flex flex-col items-start gap-3 md:items-end">
+                <div
+                  className="font-mono text-[10px] uppercase tracking-[0.3em]"
+                  style={{ color: TEXT_MUTED }}
+                >
+                  Year
+                </div>
+                <div className="text-2xl font-semibold" style={{ color: TEXT_DARK }}>
+                  {project.year}
+                </div>
+                {project.link && (
+                  <a
+                    href={project.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-2 font-mono text-[10px] uppercase tracking-[0.28em] transition-colors hover:bg-[#1a1917] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+                    style={{
+                      border: `1px solid ${BORDER_CARD}`,
+                      color: TEXT_META,
+                      outlineColor: FOCUS_RING,
+                    }}
+                  >
+                    Visit Site
+                  </a>
+                )}
+              </div>
             </div>
-            <div className="text-2xl font-semibold" style={{ color: TEXT_DARK }}>
-              {project.year}
-            </div>
-            {project.link && (
-              <a
-                href={project.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-2 font-mono text-[10px] uppercase tracking-[0.28em] transition-colors hover:bg-[#1a1917] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  border: `1px solid ${BORDER_CARD}`,
-                  color: TEXT_META,
-                  outlineColor: FOCUS_RING,
-                }}
-              >
-                Visit Site
-              </a>
-            )}
-          </div>
-        </div>
+          </>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -507,6 +520,7 @@ export default function ProjectsFinale() {
   useEffect(() => {
     if (!fullscreen) return undefined;
 
+    document.body.classList.add('projects-finale-modal-open');
     window.codexLenis?.stop?.();
 
     const onKey = (e) => {
@@ -519,6 +533,7 @@ export default function ProjectsFinale() {
 
     return () => {
       window.removeEventListener('keydown', onKey);
+      document.body.classList.remove('projects-finale-modal-open');
       window.codexLenis?.start?.();
     };
   }, [fullscreen, closeFullscreen]);
