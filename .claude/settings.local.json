@@ -13,13 +13,20 @@
       "PowerShell(Start-Process -FilePath \"powershell\" -ArgumentList \"-NoProfile -Command `\"cd 'c:\\\\Users\\\\Mark\\\\OneDrive\\\\Documents\\\\GitHub\\\\3DwebsiteContemporyWorld'; npm run dev`\"\" -WindowStyle Hidden; Start-Sleep -Seconds 5; Write-Output \"Dev server started\")",
       "mcp__figma__generate_figma_design",
       "PowerShell(Start-Process \"http://localhost:5173/#figmacapture=aa5fe17e-e3af-4449-9f73-e0aa22fcb438&figmaendpoint=https%3A%2F%2Fmcp.figma.com%2Fmcp%2Fcapture%2Faa5fe17e-e3af-4449-9f73-e0aa22fcb438%2Fsubmit&figmadelay=3000\")",
-      "PowerShell(Start-Process \"https://www.figma.com/design/RtAy1QK4HrgGX5wXOWz0CC\")"
+      "PowerShell(Start-Process \"https://www.figma.com/design/RtAy1QK4HrgGX5wXOWz0CC\")",
       "Bash(npx eslint *)",
       "WebSearch",
       "Bash(npm --version)",
       "Bash(uipro --version)",
       "Bash(uipro --help)",
-      "Bash(uipro init *)"
+      "Bash(uipro init *)",
+      "Bash(jobs -l)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"dev server: %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -sI --max-time 12 \"https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json\")",
+      "Bash(curl -s --max-time 12 -o /dev/null -w \"geojson land HTTP:%{http_code} size:%{size_download}\\\\n\" \"https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/physical/ne_110m_land.json\")",
+      "Bash(node gen-world.mjs)",
+      "Bash(curl -s --max-time 30 -o land-110m.json \"https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json\" -w \"HTTP:%{http_code} size:%{size_download}\\\\n\")"
     ]
   }
 }

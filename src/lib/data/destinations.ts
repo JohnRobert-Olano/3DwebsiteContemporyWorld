@@ -4,7 +4,7 @@ export const destinations = [
     name: 'Colosseum',
     location: 'Rome, Italy',
     built: '70-80 AD',
-    eraRange: '264 BC – 476 AD',
+    eraRange: '264 BC - 476 AD',
     lat: 41.89191,
     lon: 12.49143,
     camera: {
@@ -22,7 +22,7 @@ export const destinations = [
     name: "Saint Peter's Basilica",
     location: 'Vatican City',
     built: '1506-1626',
-    eraRange: '3rd Century BC – 15th Century AD',
+    eraRange: '3rd Century BC - 15th Century AD',
     lat: 41.90484,
     lon: 12.45344,
     camera: {
@@ -40,8 +40,8 @@ export const destinations = [
     name: "Xi'an City Wall",
     location: "Xi'an, China",
     built: '1374-1378, Ming Dynasty',
-    eraRange: '1206 AD – 1242 AD',
-    // "Fortifications of Xi'an" — the Google Maps entry, Xincheng District,
+    eraRange: '1206 AD - 1242 AD',
+    // "Fortifications of Xi'an" - the Google Maps entry, Xincheng District,
     // postal 710003. Coordinates from OpenStreetMap's "永宁门" tourism
     // attraction node, which sits dead-center on the South Gate (Yongning
     // Gate) gatehouse + barbican complex on the south wall.
@@ -56,7 +56,7 @@ export const destinations = [
     name: 'San Salvador Island',
     location: 'San Salvador, Bahamas',
     built: 'Natural island',
-    eraRange: 'August 3, 1492 – November 7, 1504',
+    eraRange: 'August 3, 1492 - November 7, 1504',
     lat: 24.02798,
     lon: -74.47961,
     camera: {
@@ -74,9 +74,9 @@ export const destinations = [
     name: 'Cagusu-an Church and Plaza',
     location: 'Cagusu-an, Guiuan, Eastern Samar, Philippines',
     built: 'Historic coastal settlement',
-    eraRange: 'September 20, 1519 – September 6, 1522',
+    eraRange: 'September 20, 1519 - September 6, 1522',
     // Google Maps plus code PRC8+VWJ Guiuan = global OLC 7Q27PRC8+VWJ, which
-    // decodes to a ~0.6m x 0.9m cell at (10.7222025°N, 125.8172539°E) — the
+    // decodes to a ~0.6m x 0.9m cell at (10.7222025°N, 125.8172539°E) - the
     // Cagusuan Church & Plaza pin on Homonhon Island.
     lat: 10.72131,
     lon: 125.81604,
@@ -95,7 +95,7 @@ export const destinations = [
     name: 'Royal Palace of Madrid',
     location: 'Madrid, Spain',
     built: '1738-1755',
-    eraRange: '1492 – 1900',
+    eraRange: '1492 - 1900',
     lat: 40.43698,
     lon: -3.72667,
     camera: {
@@ -113,7 +113,7 @@ export const destinations = [
     name: 'Neuschwanstein Castle',
     location: 'Schwangau, Germany',
     built: '1869-1886',
-    eraRange: '1618 – 1945',
+    eraRange: '1618 - 1945',
     lat: 47.56202,
     lon: 10.70776,
     camera: {
@@ -131,7 +131,7 @@ export const destinations = [
     name: 'Buckingham Palace',
     location: 'London, England',
     built: '1703, original townhouse',
-    eraRange: '1870 – 1914',
+    eraRange: '1870 - 1914',
     lat: 51.50102,
     lon: -0.14405,
     camera: {
@@ -149,7 +149,7 @@ export const destinations = [
     name: 'Big Ben',
     location: 'London, England',
     built: '1859',
-    eraRange: 'November 2, 1936 – 1939',
+    eraRange: 'November 2, 1936 - 1939',
     lat: 51.49708,
     lon: -0.12738,
     camera: {
@@ -167,7 +167,7 @@ export const destinations = [
     name: 'Statue of Liberty',
     location: 'New York, USA',
     built: '1886',
-    eraRange: 'September 2, 1945 – December 25, 1991',
+    eraRange: 'September 2, 1945 - December 25, 1991',
     lat: 40.68939,
     lon: -74.04469,
     camera: {
@@ -185,7 +185,7 @@ export const destinations = [
     name: 'The White House',
     location: 'Washington, D.C., USA',
     built: '1792-1800',
-    eraRange: 'December 26, 1991 – Present',
+    eraRange: 'December 26, 1991 - Present',
     lat: 38.89724,
     lon: -77.03687,
     camera: {
@@ -226,7 +226,7 @@ export const romeIntro = {
   lon: 12.4964,
 };
 
-// Rome Intro removed from the nav — Colosseum (destinations[0]) is now the
+// Rome Intro removed from the nav - Colosseum (destinations[0]) is now the
 // first journey stop, so the nav indices line up 1:1 with the destinations
 // array.
 export const journeyNavItems = destinations.map((destination) => ({

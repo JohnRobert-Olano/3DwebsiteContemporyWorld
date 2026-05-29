@@ -3,6 +3,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { destinations, journeyNavItems } from '../lib/data/destinations';
+import { projects } from '../lib/data/projects';
 import LandmarkTitleCard from './LandmarkTitleCard';
 import ProjectsFinale from './ProjectsFinale';
 import SplitWords from './SplitWords';
@@ -10,12 +11,13 @@ import SplitWords from './SplitWords';
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
 /* ────────────────────────────────────────────────────────────
-   Section Data  (unchanged — pure content, no layout logic)
+   Section Data  (unchanged - pure content, no layout logic)
    ──────────────────────────────────────────────────────────── */
 const sections = [
   {
     id: 'culture',
     navLabel: 'Culture',
+    mobileLabel: 'Culture',
     title: 'Culture',
     subTitle: 'The Global Village',
     headlineLines: ['The', 'global', 'village'],
@@ -37,6 +39,7 @@ const sections = [
   {
     id: 'economy',
     navLabel: 'Economy',
+    mobileLabel: 'Economy',
     title: 'Economy',
     subTitle: 'The Engine',
     headlineLines: ['The', 'global', 'economy'],
@@ -58,6 +61,7 @@ const sections = [
   {
     id: 'environment',
     navLabel: 'Environment',
+    mobileLabel: 'Climate',
     title: 'Environment',
     subTitle: 'The Shared Home',
     headlineLines: ['The', 'shared', 'home'],
@@ -79,6 +83,7 @@ const sections = [
   {
     id: 'politics',
     navLabel: 'Politics',
+    mobileLabel: 'Power',
     title: 'Politics',
     subTitle: 'The Rules of the Game',
     headlineLines: ['The', 'rules of', 'the game'],
@@ -100,6 +105,7 @@ const sections = [
   {
     id: 'technology',
     navLabel: 'Technology',
+    mobileLabel: 'Tech',
     title: 'Technology',
     subTitle: 'The Nervous System',
     headlineLines: ['The', 'nervous', 'system'],
@@ -163,6 +169,70 @@ const TECHNOLOGY_PANEL_HOLD_MS = 1200;
 const TECHNOLOGY_SNAP_GUARD_MS = 2200;
 const TECHNOLOGY_GESTURE_QUIET_MS = 1200;
 
+function IntroHero({ onBegin, onAtlas }) {
+  const metrics = [
+    { value: sections.length, label: 'systems' },
+    { value: destinations.length, label: 'landmarks' },
+    { value: projects.length, label: 'visual essays' },
+  ];
+
+  return (
+    <section
+      className="relative min-h-[100dvh] w-full overflow-hidden"
+      aria-labelledby="intro-hero-title"
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_42%,rgba(242,109,91,0.18),transparent_34%),linear-gradient(90deg,rgba(5,7,14,0.78),rgba(5,7,14,0.18)_52%,rgba(5,7,14,0.7))]" />
+      <div className="pointer-events-auto relative z-20 mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col justify-end px-5 pb-24 pt-28 sm:px-8 md:pb-20 lg:justify-center lg:px-10">
+        <div className="grid items-end gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
+          <div className="max-w-5xl">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
+              Contemporary world atlas
+            </p>
+            <h1
+              id="intro-hero-title"
+              className="mt-5 max-w-5xl font-display text-[clamp(2.75rem,8vw,5.5rem)] font-semibold leading-[0.98] tracking-normal text-white"
+            >
+              Globalization in motion
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/[0.82] sm:text-lg">
+              Explore how culture, capital, climate, power, and technology move across one shared planet.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={onBegin}
+                className="cursor-pointer rounded-full bg-white px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-bg shadow-[0_16px_42px_rgba(0,0,0,0.36)] transition-colors duration-200 hover:bg-primary hover:text-bg focus-visible:outline-primary"
+              >
+                Begin journey
+              </button>
+              <button
+                type="button"
+                onClick={onAtlas}
+                className="cursor-pointer rounded-full border border-white/[0.18] bg-white/[0.08] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-xl transition-colors duration-200 hover:border-primary/80 hover:bg-primary/[0.12] focus-visible:outline-primary"
+              >
+                Open atlas
+              </button>
+            </div>
+          </div>
+
+          <dl className="grid gap-3 border-l border-white/[0.12] pl-5 sm:grid-cols-3 sm:border-l-0 sm:border-t sm:pl-0 sm:pt-5 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            {metrics.map((metric) => (
+              <div key={metric.label}>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+                  {metric.label}
+                </dt>
+                <dd className="mt-1 text-3xl font-semibold text-white">
+                  {metric.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ────────────────────────────────────────────────────────────
    ContentSection
    Editorial typography panel for one of the five globalization
@@ -177,7 +247,7 @@ function ContentSection({ sec, index, onActive, onLeave }) {
   const microcopyPos = side === 'right' ? 'left-[6vw]' : 'right-[6vw]';
   const headlineAlign = side === 'right' ? 'text-right' : 'text-left';
   const indentProp = side === 'right' ? 'paddingRight' : 'paddingLeft';
-  const microLabel = `${String(index + 1).padStart(2, '0')} — ${sec.navLabel}`;
+  const microLabel = sec.subTitle;
   const fullHeadline = `${sec.headlineLines.join(' ')}.`;
 
   useEffect(() => {
@@ -276,17 +346,17 @@ function ContentSection({ sec, index, onActive, onLeave }) {
       id={sec.id}
       ref={sectionRef}
       className="panel-section relative w-full overflow-visible"
-      style={{ minHeight: '100vh' }}
+      style={{ minHeight: '100dvh' }}
       aria-labelledby={`${sec.id}-title`}
     >
       <div
         className="content-panel-type pointer-events-none absolute inset-0 z-20"
       >
-        {/* Huge editorial headline — top, outer edge */}
+        {/* Huge editorial headline - top, outer edge */}
         <h2
           id={`${sec.id}-title`}
-          className={`pointer-events-auto absolute top-[14vh] ${headlinePos} max-w-[88vw] font-semibold text-white leading-[0.92] tracking-[-0.018em] ${headlineAlign}`}
-          style={{ fontSize: 'clamp(54px, 10.4vw, 200px)' }}
+          className={`pointer-events-auto absolute top-[12dvh] sm:top-[14dvh] ${headlinePos} max-w-[88vw] font-semibold text-white leading-[0.95] tracking-normal ${headlineAlign}`}
+          style={{ fontSize: 'clamp(48px, 10.4vw, 188px)' }}
           aria-label={fullHeadline}
         >
           <span aria-hidden="true">
@@ -309,7 +379,7 @@ function ContentSection({ sec, index, onActive, onLeave }) {
                           style={{ display: 'inline-block', willChange: 'transform, opacity' }}
                         >
                           {word}
-                          {isLastWord && <span className="text-[#FF3B30]">.</span>}
+                          {isLastWord && <span className="text-primary">.</span>}
                         </span>
                       </span>
                     );
@@ -320,40 +390,40 @@ function ContentSection({ sec, index, onActive, onLeave }) {
           </span>
         </h2>
 
-        {/* Microcopy block — bottom, opposite edge (near globe).
+        {/* Microcopy block - bottom, opposite edge (near globe).
             Always text-left (ragged-right) regardless of which corner
-            it lives in — matches the editorial reference. */}
+            it lives in - matches the editorial reference. */}
         <div
-          className={`content-panel-copy pointer-events-auto absolute bottom-[10vh] ${microcopyPos} flex w-[88vw] max-w-[300px] flex-col gap-4 text-left`}
+          className={`content-panel-copy pointer-events-auto absolute bottom-[18dvh] ${microcopyPos} flex w-[88vw] max-w-[22rem] flex-col gap-4 rounded-[6px] border border-white/[0.10] bg-bg/[0.58] p-4 text-left shadow-[0_24px_70px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:p-5 lg:bottom-[10dvh]`}
         >
           <SplitWords
             as="span"
             text={microLabel}
-            className="font-mono text-[10px] uppercase tracking-[0.32em] text-white/60"
+            className="font-mono text-[10px] uppercase tracking-[0.24em] text-primary"
           />
           <SplitWords
             as="p"
             text={sec.summary}
-            className="text-[12px] leading-[1.55] text-white sm:text-[13px]"
+            className="text-[13px] leading-[1.6] text-white/[0.86] sm:text-sm"
           />
           <a
             href="#destination-colosseum"
-            className="self-start text-[11px] font-semibold text-white underline underline-offset-[5px] decoration-white/60 transition-colors hover:decoration-white"
-            aria-label="Archive Index"
+            className="self-start rounded-full border border-white/[0.16] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:border-primary/70 hover:text-primary focus-visible:outline-primary"
+            aria-label="Open landmark atlas"
           >
             <span aria-hidden="true">
               <span
                 className="split-word"
                 style={{ display: 'inline-block', willChange: 'transform, opacity' }}
               >
-                Archive
+                Open
               </span>
               {' '}
               <span
                 className="split-word"
                 style={{ display: 'inline-block', willChange: 'transform, opacity' }}
               >
-                Index
+                atlas
               </span>
             </span>
           </a>
@@ -381,7 +451,7 @@ export default function Content({ lenisRef }) {
   // read the latest values without re-binding on every state update.
   const visibleTitleIndexRef = useRef(-1);
   const titlePhaseRef = useRef('hidden');
-  // Action to invoke once the current exit animation finishes — used by the
+  // Action to invoke once the current exit animation finishes - used by the
   // wheel/touch/nav handlers to defer the actual scroll/snap until the
   // previous landmark title has finished animating out.
   const pendingActionRef = useRef(null);
@@ -518,7 +588,7 @@ export default function Content({ lenisRef }) {
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (reducedMotion) {
-      // No scroll-scrubbed animations — content stays statically visible.
+      // No scroll-scrubbed animations - content stays statically visible.
       window.globeTargetDirection = 0;
       return undefined;
     }
@@ -537,7 +607,7 @@ export default function Content({ lenisRef }) {
 
       // Each landmark gets a short top-pin so it behaves as a discrete page.
       // The wheel/touch handler below snaps to the next landmark on a single
-      // scroll input — and the title state machine (see useEffect later in
+      // scroll input - and the title state machine (see useEffect later in
       // this component) drives the in/out animations independently from the
       // ScrollTrigger callbacks.
       const destinationPanels = gsap.utils.toArray('.destination-section');
@@ -608,7 +678,6 @@ export default function Content({ lenisRef }) {
         end: 'max',
         onUpdate: scheduleActiveDestinationSync,
       });
-      window.addEventListener('scroll', scheduleActiveDestinationSync, { passive: true });
 
       ScrollTrigger.refresh();
       syncFrame = window.requestAnimationFrame(() => {
@@ -627,9 +696,6 @@ export default function Content({ lenisRef }) {
       if (syncFrame) window.cancelAnimationFrame(syncFrame);
       if (viewportSyncFrame) window.cancelAnimationFrame(viewportSyncFrame);
       if (viewportSyncTimer) window.clearTimeout(viewportSyncTimer);
-      if (scheduleActiveDestinationSync) {
-        window.removeEventListener('scroll', scheduleActiveDestinationSync);
-      }
       viewportSyncTrigger?.kill();
       syncTimers.forEach((timer) => window.clearTimeout(timer));
       ctx.revert();
@@ -828,7 +894,7 @@ export default function Content({ lenisRef }) {
     };
 
     const findCurrentPanelIdx = (panels) => {
-      // Use viewport-relative geometry — element.offsetTop is broken for
+      // Use viewport-relative geometry - element.offsetTop is broken for
       // GSAP-pinned destinations (their offsetParent becomes the pin-spacer,
       // so offsetTop reports 0 and the loop runs off the end of the list).
       const tolerance = 8;
@@ -890,14 +956,14 @@ export default function Content({ lenisRef }) {
         settleJourneyIndex(destinationIndex);
       };
 
-      // Above the first panel scrolling up — release to native scroll.
+      // Above the first panel scrolling up - release to native scroll.
       if (currentIdx === -1 && direction < 0) return false;
 
       const targetIdx = currentIdx === -1 ? 0 : currentIdx + direction;
 
-      // Above the first panel scrolling up — release to native scroll.
+      // Above the first panel scrolling up - release to native scroll.
       if (targetIdx < 0) return false;
-      // At or past the last panel scrolling down — block the wheel event so
+      // At or past the last panel scrolling down - block the wheel event so
       // the user stays parked at the final landmark (WTC). Returning true
       // tells handleWheel to call preventDefault and stop the scroll.
       if (targetIdx >= panels.length) {
@@ -958,7 +1024,7 @@ export default function Content({ lenisRef }) {
       const phase = titlePhaseRef.current;
       const visIdx = visibleTitleIndexRef.current;
       if (phase === 'exiting') {
-        // Already exiting — last input wins. Replace pending without
+        // Already exiting - last input wins. Replace pending without
         // starting a second exit.
         pendingActionRef.current = () => snapToPanel(direction);
         return true;
@@ -974,7 +1040,7 @@ export default function Content({ lenisRef }) {
       return snapToPanel(direction);
     };
 
-    // CAPTURE PHASE — must fire BEFORE Lenis's bubble-phase listener,
+    // CAPTURE PHASE - must fire BEFORE Lenis's bubble-phase listener,
     // otherwise Lenis's preventDefault locks the wheel event out of reach.
     const handleWheel = (e) => {
       // Block scroll while a snap is mid-flight, the map camera is still
@@ -1194,38 +1260,37 @@ export default function Content({ lenisRef }) {
 
       {/* ─── MOBILE NAV (bottom bar) ─── */}
       <nav
-        className="fixed bottom-6 left-6 right-6 z-50 flex gap-1.5 overflow-x-auto rounded-lg border border-white/5 bg-black/60 p-1.5 backdrop-blur-2xl pointer-events-auto lg:hidden shadow-2xl"
+        className="fixed bottom-4 left-4 right-4 z-50 flex gap-1.5 overflow-x-auto rounded-full border border-white/[0.10] bg-bg/[0.74] p-1.5 shadow-2xl backdrop-blur-2xl pointer-events-auto lg:hidden"
         aria-label="Mobile section navigation"
       >
         {sections.map((sec, i) => (
           <button
             key={sec.id}
             onClick={() => scrollTo(i)}
-            className={`min-w-max rounded border px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.2em] transition-all duration-200 cursor-pointer ${
+            className={`min-w-max rounded-full border px-2.5 py-2 font-mono text-[9px] uppercase tracking-[0.14em] transition-all duration-200 cursor-pointer sm:px-3 sm:tracking-[0.16em] ${
               activeSection === i
-                ? 'border-primary/50 bg-primary/10 text-white'
-                : 'border-white/5 bg-white/5 text-muted'
+                ? 'border-primary/60 bg-primary/[0.15] text-white'
+                : 'border-white/[0.08] bg-white/[0.04] text-muted'
             }`}
             aria-current={activeSection === i ? 'step' : undefined}
             aria-label={`Jump to ${sec.navLabel}`}
           >
-            {String(i + 1).padStart(2, '0')}
+            {sec.mobileLabel}
           </button>
         ))}
       </nav>
 
       <nav
-        className={`fixed right-8 top-1/2 z-50 hidden w-64 -translate-y-1/2 flex-col gap-1 rounded border border-white/5 bg-black/40 p-3 shadow-2xl backdrop-blur-2xl transition-opacity duration-300 pointer-events-auto lg:flex ${
+        className={`fixed right-8 top-1/2 z-50 hidden w-72 -translate-y-1/2 flex-col gap-1 rounded-[6px] border border-white/[0.08] bg-bg/[0.62] p-3 shadow-2xl backdrop-blur-2xl transition-opacity duration-300 pointer-events-auto lg:flex ${
           journeyNavActive ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-label="Destination index"
       >
-        <div className="mb-3 px-2 font-mono text-[9px] uppercase tracking-[0.3em] text-muted border-b border-white/5 pb-2">
-          Global Registry
+        <div className="mb-3 border-b border-white/[0.08] px-2 pb-3 font-mono text-[9px] uppercase tracking-[0.24em] text-primary">
+          Landmark atlas
         </div>
         {journeyNavItems.map((item, i) => {
           const isActive = activeJourneyIndex === i;
-          const isPast = activeJourneyIndex > i;
 
           return (
             <button
@@ -1233,24 +1298,19 @@ export default function Content({ lenisRef }) {
               type="button"
               title={item.name}
               onClick={() => scrollToJourney(i)}
-              className={`group relative flex cursor-pointer items-center gap-4 rounded px-2 py-2 text-left transition-all duration-200 ${
-                isActive ? 'bg-white/5 text-white' : 'text-muted hover:bg-white/10 hover:text-white'
+              className={`group relative flex cursor-pointer flex-col rounded-[5px] border-l px-3 py-2.5 text-left transition-all duration-200 ${
+                isActive
+                  ? 'border-l-primary bg-white/[0.06] text-white'
+                  : 'border-l-white/[0.08] text-muted hover:border-l-primary/60 hover:bg-white/[0.08] hover:text-white'
               }`}
               aria-current={isActive ? 'step' : undefined}
               aria-label={`Jump to ${item.name}`}
             >
-              <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full transition-all duration-300 ${
-                  isActive
-                    ? 'bg-primary shadow-[0_0_10px_var(--color-primary)] scale-125'
-                    : isPast
-                      ? 'bg-primary/40'
-                      : 'bg-white/20'
-                }`}
-                aria-hidden="true"
-              />
-              <span className="truncate font-mono text-[9px] uppercase tracking-[0.15em]">
+              <span className="w-full truncate font-mono text-[9px] uppercase tracking-[0.15em]">
                 {item.name}
+              </span>
+              <span className="mt-1 w-full truncate text-[11px] text-white/[0.46]">
+                {item.location}
               </span>
             </button>
           );
@@ -1260,33 +1320,28 @@ export default function Content({ lenisRef }) {
       <button
         type="button"
         onClick={() => setIsJourneyMenuOpen(true)}
-        className={`fixed right-6 top-24 z-50 cursor-pointer rounded border border-white/10 bg-black/60 p-3 text-white shadow-xl backdrop-blur-2xl transition-opacity duration-300 lg:hidden ${
+        className={`fixed right-4 top-20 z-50 cursor-pointer rounded-full border border-white/[0.12] bg-bg/[0.72] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white shadow-xl backdrop-blur-2xl transition-opacity duration-300 lg:hidden ${
           journeyNavActive ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-label="Open destination index"
         aria-expanded={isJourneyMenuOpen}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square">
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
+        Atlas
       </button>
 
       {isJourneyMenuOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/95 p-8 backdrop-blur-3xl pointer-events-auto lg:hidden">
+        <div className="fixed inset-0 z-[70] bg-bg/[0.96] p-6 backdrop-blur-3xl pointer-events-auto lg:hidden">
           <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-6">
-            <h2 className="font-mono text-xs font-bold uppercase tracking-[0.4em] text-white">
-              Data Index
+            <h2 className="font-mono text-xs font-bold uppercase tracking-[0.26em] text-white">
+              Landmark atlas
             </h2>
             <button
               type="button"
               onClick={() => setIsJourneyMenuOpen(false)}
-              className="cursor-pointer rounded border border-white/10 p-2 text-muted hover:text-white transition-colors"
+              aria-label="Close destination index"
+              className="cursor-pointer rounded-full border border-white/[0.12] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted transition-colors hover:text-white"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              Close
             </button>
           </div>
           <div className="mt-8 grid gap-3 overflow-y-auto max-h-[70vh]">
@@ -1298,20 +1353,18 @@ export default function Content({ lenisRef }) {
                   key={item.id}
                   type="button"
                   onClick={() => scrollToJourney(i)}
-                  className={`flex cursor-pointer items-center justify-between gap-4 rounded border px-5 py-4 text-left transition-all ${
+                  className={`flex cursor-pointer flex-col rounded-[6px] border px-5 py-4 text-left transition-all ${
                     isActive
-                      ? 'border-primary/50 bg-primary/10 text-white'
-                      : 'border-white/5 bg-white/5 text-muted'
+                      ? 'border-primary/60 bg-primary/[0.12] text-white'
+                      : 'border-white/[0.08] bg-white/[0.04] text-muted'
                   }`}
                   aria-current={isActive ? 'step' : undefined}
                 >
-                  <span className="min-w-0">
-                    <span className="block truncate font-mono text-[10px] uppercase tracking-[0.2em]">
-                      {item.name}
-                    </span>
+                  <span className="block w-full truncate font-mono text-[10px] uppercase tracking-[0.18em]">
+                    {item.name}
                   </span>
-                  <span className="font-mono text-[10px] text-primary">
-                    {String(i + 1).padStart(2, '0')}
+                  <span className="mt-2 block w-full truncate text-xs text-white/[0.48]">
+                    {item.location}
                   </span>
                 </button>
               );
@@ -1320,8 +1373,10 @@ export default function Content({ lenisRef }) {
         </div>
       )}
 
-      {/* ─── HERO SPACER (initial view before first section) ─── */}
-      <div className="h-[70vh]" aria-hidden="true" />
+      <IntroHero
+        onBegin={() => scrollTo(0)}
+        onAtlas={() => scrollToJourney(0)}
+      />
 
       {/* ─── SECTION PANELS ───
           Editorial typography over the live globe. Headline anchors to the
@@ -1345,7 +1400,7 @@ export default function Content({ lenisRef }) {
         // statically inside each section (each section is viewport-tall, so
         // only the one currently scrolled into view shows its title). For the
         // normal-motion path the title is rendered once outside this map as
-        // a fixed viewport overlay — see the block right after this map.
+        // a fixed viewport overlay - see the block right after this map.
         const sectionPhase = reducedMotionPreferred
           ? 'visible'
           : (visibleTitleIndex === i ? titlePhase : 'hidden');
@@ -1362,7 +1417,7 @@ export default function Content({ lenisRef }) {
             id={`destination-${destination.id}`}
             key={destination.id}
             className="destination-section panel-section relative w-full overflow-visible"
-            style={{ minHeight: '100vh' }}
+            style={{ minHeight: '100dvh' }}
           >
             {reducedMotionPreferred && (
               <LandmarkTitleCard
@@ -1388,9 +1443,9 @@ export default function Content({ lenisRef }) {
                   aria-label="Go to articles"
                   disabled={!isFinalDestinationVisible}
                   tabIndex={isFinalDestinationVisible ? undefined : -1}
-                  className="cursor-pointer rounded border border-white/20 bg-white px-5 py-3 font-mono text-[11px] font-semibold tracking-[0.16em] text-black shadow-[0_18px_45px_rgba(0,0,0,0.35)] outline-none transition-colors duration-200 hover:border-white/70 hover:bg-black hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+                  className="cursor-pointer rounded-full border border-white/20 bg-white px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-bg shadow-[0_18px_45px_rgba(0,0,0,0.35)] outline-none transition-colors duration-200 hover:border-primary/70 hover:bg-primary hover:text-bg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
                 >
-                  Go to articles
+                  Open articles
                 </button>
               </div>
             )}

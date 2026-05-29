@@ -10,8 +10,27 @@
  * @property {string} [link]       Optional external URL
  */
 
+const albumCoverBlurbs = {
+  1: 'A visual essay on conflict, fragile alliances, and the human cost of security decisions.',
+  2: 'Food systems, aid networks, and climate pressure are traced through a global hunger lens.',
+  3: 'A study of prices, wages, and monetary shocks as they move through connected economies.',
+  4: 'Displacement is framed as a human geography of borders, shelter, memory, and return.',
+  5: 'Labor, extraction, and industrial policy are shown as linked struggles for dignity.',
+  6: 'Sovereign borrowing, household debt, and development finance become one connected pressure system.',
+  7: 'Cover studies for interactive lessons, prototypes, and contemporary-world simulations.',
+  8: 'A job-market simulator about attention, opportunity, and the platform logic of work.',
+  9: 'A practical finance simulation for Philippine salary, tax, and take-home pay decisions.',
+  10: 'A logistics simulator that turns distance, delay, ports, and demand into playable systems.',
+  11: 'An economic systems prototype about how shocks travel from one market to another.',
+  12: 'A global exchange concept focused on trade, currency, and cross-border coordination.',
+  13: 'Digital commerce is presented as a new route system for goods, platforms, and sellers.',
+  14: 'Remote work is explored as a redistribution of opportunity, time, and geography.',
+  15: 'Mobile finance appears as infrastructure for inclusion, remittances, and daily survival.',
+  16: 'An open archive slot for unfinished covers, studies, and future globalization modules.',
+};
+
 const albumCoverBlurb = (coverNumber) =>
-  `Final album cover artwork sourced from /public/album_covers/${coverNumber}.png.`;
+  albumCoverBlurbs[coverNumber] ?? `Visual essay ${coverNumber}.`;
 
 export const projects = [
   {

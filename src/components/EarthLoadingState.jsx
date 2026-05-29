@@ -1,6 +1,11 @@
 export default function EarthLoadingState({ className = '', label = 'Preparing 3D Earth' }) {
   return (
-    <div className={`earth-preload-shell ${className}`} aria-hidden="true">
+    <div
+      className={`earth-preload-shell ${className}`}
+      role={label ? 'status' : undefined}
+      aria-live={label ? 'polite' : undefined}
+      aria-hidden={label ? undefined : 'true'}
+    >
       <div className="earth-preload-orbit">
         <div className="earth-preload-glow" />
         <div className="earth-preload-globe">
