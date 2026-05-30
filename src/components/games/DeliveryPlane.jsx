@@ -1,94 +1,169 @@
-import { useEffect, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
+import { routeControlPoint, bezierPoint, bezierTangent } from '../../lib/games/route';
 
-// Three.js airplane that flies the shipping route. Rendered into a transparent,
-// always-mounted r3f canvas overlaid on the delivery map (pointer-events: none so
-// it never blocks the map or the modal close). Lazy-loaded by the delivery game
-// so three only ships when this cover is opened. Used ONLY here.
-const DURATION_MS = 1700;
+// Three.js airliner that flies the curved shipping route. Rendered into a
+// transparent, always-mounted r3f canvas overlaid on the delivery map
+// (pointer-events:none so it never blocks the map or the modal close). Lazy-
+// loaded by the delivery game so three only ships when this cover is opened.
+//
+// The plane is a cohesive procedural mesh (lathed fuselage + extruded swept
+// wings/tail/fin) - no box/cone primitives form the silhouette, and no external
+// model asset. Nose points +X; wings span Y; the fin rises +Z toward the camera.
 
-// Low-poly top-down airliner built from primitives - no external model asset.
+// Swept, symmetric wing planform (chord on X, span on Y), extruded thin on Z.
+function wingShape(span, leadRoot, leadTip, trailTip, trailRoot) {
+  const s = new THREE.Shape();
+  s.moveTo(leadRoot, 0);
+  s.lineTo(leadTip, span);
+  s.lineTo(trailTip, span);
+  s.lineTo(trailRoot, 0);
+  s.lineTo(trailTip, -span);
+  s.lineTo(leadTip, -span);
+  s.closePath();
+  return s;
+}
+
+function finShape() {
+  const s = new THREE.Shape();
+  s.moveTo(-0.62, 0);
+  s.lineTo(-1.02, 0);
+  s.lineTo(-0.98, 0.5);
+  s.lineTo(-0.76, 0.12);
+  s.closePath();
+  return s;
+}
+
+const EXTRUDE = (depth, bevel) => ({
+  depth,
+  bevelEnabled: true,
+  bevelThickness: bevel,
+  bevelSize: bevel,
+  bevelSegments: 1,
+  curveSegments: 6,
+});
+
 function PlaneModel() {
+  const geoms = useMemo(() => {
+    const fuselagePts = [
+      [0.02, -1.05], [0.1, -0.8], [0.17, -0.45], [0.21, -0.05],
+      [0.21, 0.35], [0.17, 0.7], [0.09, 0.98], [0.02, 1.2],
+    ].map(([r, h]) => new THREE.Vector2(r, h));
+
+    return {
+      fuselage: new THREE.LatheGeometry(fuselagePts, 22),
+      wing: new THREE.ExtrudeGeometry(wingShape(1.15, 0.2, -0.12, -0.4, -0.5), EXTRUDE(0.07, 0.02)),
+      tail: new THREE.ExtrudeGeometry(wingShape(0.5, -0.7, -0.82, -1.0, -1.02), EXTRUDE(0.06, 0.015)),
+      fin: new THREE.ExtrudeGeometry(finShape(), EXTRUDE(0.05, 0.012)),
+    };
+  }, []);
+
+  // R3F auto-disposes these attached geometries when the canvas unmounts; no
+  // manual disposal (which would double-dispose under React StrictMode).
+
   return (
     <group>
-      {/* fuselage */}
-      <mesh>
-        <boxGeometry args={[2, 0.34, 0.4]} />
-        <meshStandardMaterial color="#f5f9ff" roughness={0.5} metalness={0.05} />
+      {/* fuselage: lathe tube laid along X, nose at +X */}
+      <mesh geometry={geoms.fuselage} rotation={[0, 0, -Math.PI / 2]}>
+        <meshStandardMaterial color="#dbe3ee" metalness={0.66} roughness={0.3} />
       </mesh>
-      {/* nose cone (points +x) */}
-      <mesh position={[1.15, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
-        <coneGeometry args={[0.19, 0.55, 18]} />
-        <meshStandardMaterial color="#f5f9ff" roughness={0.5} metalness={0.05} />
+      {/* main wing */}
+      <mesh geometry={geoms.wing} position={[0, 0, -0.035]}>
+        <meshStandardMaterial color="#aebfce" metalness={0.55} roughness={0.4} />
       </mesh>
-      {/* main wings */}
-      <mesh>
-        <boxGeometry args={[0.66, 2.3, 0.1]} />
-        <meshStandardMaterial color="#2b86d9" roughness={0.45} />
+      {/* horizontal stabilizer */}
+      <mesh geometry={geoms.tail} position={[0, 0, -0.03]}>
+        <meshStandardMaterial color="#aebfce" metalness={0.55} roughness={0.4} />
       </mesh>
-      {/* tailplane */}
-      <mesh position={[-0.82, 0, 0]}>
-        <boxGeometry args={[0.42, 1.05, 0.08]} />
-        <meshStandardMaterial color="#2b86d9" roughness={0.45} />
+      {/* vertical fin standing toward the camera (+Z), cyan accent */}
+      <mesh geometry={geoms.fin} rotation={[Math.PI / 2, 0, 0]}>
+        <meshStandardMaterial color="#22b8d8" metalness={0.5} roughness={0.34} emissive="#0b3a46" emissiveIntensity={0.5} />
       </mesh>
-      {/* vertical stabilizer */}
-      <mesh position={[-0.9, 0, 0.24]}>
-        <boxGeometry args={[0.42, 0.08, 0.52]} />
-        <meshStandardMaterial color="#ef5b43" roughness={0.45} />
+      {/* nav lights (small emissive spheres - detail, not silhouette) */}
+      <mesh position={[-0.12, 1.15, 0]}>
+        <sphereGeometry args={[0.045, 10, 10]} />
+        <meshStandardMaterial color="#2fe3ff" emissive="#2fe3ff" emissiveIntensity={1.5} toneMapped={false} />
+      </mesh>
+      <mesh position={[-0.12, -1.15, 0]}>
+        <sphereGeometry args={[0.045, 10, 10]} />
+        <meshStandardMaterial color="#ff5a45" emissive="#ff5a45" emissiveIntensity={1.5} toneMapped={false} />
+      </mesh>
+      <mesh position={[-1.02, 0, 0.07]}>
+        <sphereGeometry args={[0.05, 12, 12]} />
+        <meshStandardMaterial color="#ffb020" emissive="#ff9500" emissiveIntensity={1.7} toneMapped={false} />
       </mesh>
     </group>
   );
 }
 
-function Plane({ from, to, routeKey, shipping, reducedMotion }) {
-  const ref = useRef(null);
+function Plane({ from, to, routeKey, phase, reducedMotion, travelMs }) {
+  const yawRef = useRef(null); // position + heading
+  const rollRef = useRef(null); // banking
   const startRef = useRef(null);
+  const invalidate = useThree((s) => s.invalidate);
 
-  // Restart the flight whenever a new shipment begins.
+  const cp = useMemo(() => routeControlPoint(from, to), [from, to]);
+
+  // Restart the flight clock whenever a new shipment begins; nudge a render so
+  // the reduced-motion (demand) frameloop repaints on route/phase changes.
   useEffect(() => {
     startRef.current = null;
-  }, [routeKey]);
+    invalidate();
+  }, [routeKey, phase, invalidate]);
 
   useFrame((state) => {
-    const group = ref.current;
-    if (!group) return;
+    const yaw = yawRef.current;
+    const roll = rollRef.current;
+    if (!yaw || !roll) return;
+
+    if (phase === 'idle') {
+      yaw.visible = false;
+      return;
+    }
+    yaw.visible = true;
 
     const { width, height } = state.size;
-    // percent (y down) -> orthographic world pixels (origin centered, y up)
-    const fx = (from.x / 100) * width - width / 2;
-    const fy = height / 2 - (from.y / 100) * height;
-    const tx = (to.x / 100) * width - width / 2;
-    const ty = height / 2 - (to.y / 100) * height;
+    const px = (p) => ({ x: (p.x / 100) * width - width / 2, y: height / 2 - (p.y / 100) * height });
+    const a = px(from);
+    const c = px(cp);
+    const b = px(to);
 
-    group.scale.setScalar(Math.min(width, height) * 0.03);
-    group.rotation.z = Math.atan2(ty - fy, tx - fx); // nose toward destination
+    yaw.scale.setScalar(Math.min(width, height) * 0.05);
 
-    if (!shipping) {
-      group.visible = false;
-      return;
-    }
-    group.visible = true;
-
-    if (reducedMotion) {
-      group.position.set(tx, ty, 0);
-      return;
+    // Progress along the curve: full arc while shipping, parked at destination
+    // once the result is in (or immediately under reduced motion).
+    let t = 1;
+    if (phase === 'shipping' && !reducedMotion) {
+      if (startRef.current == null) startRef.current = state.clock.elapsedTime;
+      t = Math.min(1, ((state.clock.elapsedTime - startRef.current) * 1000) / travelMs);
+      if (t < 1) invalidate();
     }
 
-    if (startRef.current == null) startRef.current = state.clock.elapsedTime;
-    const t = Math.min(1, ((state.clock.elapsedTime - startRef.current) * 1000) / DURATION_MS);
-    group.position.set(fx + (tx - fx) * t, fy + (ty - fy) * t, 0);
+    const pos = bezierPoint(a, c, b, t);
+    const tan = bezierTangent(a, c, b, t);
+    yaw.position.set(pos.x, pos.y, 0);
+    yaw.rotation.z = Math.atan2(tan.y, tan.x);
+
+    // Bank into the turn: signed curvature of the quadratic, eased in/out so the
+    // plane rolls level at departure and arrival.
+    const acc = { x: 2 * (b.x - 2 * c.x + a.x), y: 2 * (b.y - 2 * c.y + a.y) };
+    const speed = Math.hypot(tan.x, tan.y) || 1;
+    const curvature = (tan.x * acc.y - tan.y * acc.x) / (speed * speed * speed);
+    const bank = THREE.MathUtils.clamp(curvature * width * 0.5, -0.5, 0.5);
+    roll.rotation.x = bank * Math.sin(Math.PI * t);
   });
 
   return (
-    <group ref={ref} visible={false}>
-      <PlaneModel />
+    <group ref={yawRef} visible={false}>
+      <group ref={rollRef}>
+        <PlaneModel />
+      </group>
     </group>
   );
 }
 
-export default function DeliveryPlane({ from, to, phase, routeKey, reducedMotion }) {
-  const shipping = phase === 'shipping';
-
+export default function DeliveryPlane({ from, to, phase, routeKey, reducedMotion, travelMs = 1800 }) {
   return (
     <Canvas
       orthographic
@@ -100,13 +175,15 @@ export default function DeliveryPlane({ from, to, phase, routeKey, reducedMotion
       aria-hidden="true"
     >
       <ambientLight intensity={0.85} />
-      <directionalLight position={[3, 6, 8]} intensity={1.15} />
+      <directionalLight position={[3, 6, 8]} intensity={1.25} />
+      <directionalLight position={[-5, -2, 4]} intensity={0.4} color="#5fd0ff" />
       <Plane
         from={from}
         to={to}
         routeKey={routeKey}
-        shipping={shipping}
+        phase={phase}
         reducedMotion={reducedMotion}
+        travelMs={travelMs}
       />
     </Canvas>
   );

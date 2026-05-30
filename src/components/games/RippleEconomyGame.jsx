@@ -150,12 +150,12 @@ export default function RippleEconomyGame() {
   const globalDirection = lastResult?.netGlobalChange >= 0 ? 'increased' : 'decreased';
 
   return (
-    <div className="ripple-economy-dashboard space-y-5">
-      <header className="ripple-clay-panel p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="ripple-economy-dashboard ripple-fit">
+      <header className="ripple-clay-panel ripple-fit-header">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <h4 className="ripple-economy-title">RIPPLE ECONOMY</h4>
-            <p className="mt-2 text-2xl font-semibold tracking-normal text-[#0f2e4c]">
+            <p className="mt-1 text-xl font-semibold tracking-normal text-[#0f2e4c] sm:text-2xl">
               Observe Global Economic Ripples.
             </p>
           </div>
@@ -164,7 +164,7 @@ export default function RippleEconomyGame() {
           </button>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[#2f658e]">
               Global Economic Stability
@@ -183,12 +183,12 @@ export default function RippleEconomyGame() {
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
-        <section className="ripple-clay-panel order-1 p-4 xl:col-start-2 xl:row-start-1">
+      <div className="ripple-fit-main">
+        <section className="ripple-clay-panel ripple-fit-controls">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-[#2f658e]">
             Event Controls
           </p>
-          <div className="mt-4 grid gap-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
             {RIPPLE_EVENTS.map((event) => (
               <button
                 key={event.id}
@@ -203,10 +203,10 @@ export default function RippleEconomyGame() {
         </section>
 
         <section
-          className="ripple-clay-panel order-2 overflow-hidden p-3 sm:p-4 xl:col-start-1 xl:row-span-2 xl:row-start-1"
+          className="ripple-clay-panel ripple-fit-map-panel overflow-hidden"
           aria-label="Economic regions map"
         >
-          <div className="ripple-map relative aspect-[2/1] overflow-hidden rounded-[18px]">
+          <div className="ripple-map ripple-fit-map relative overflow-hidden rounded-[18px]">
             <FlatWorldMap className="absolute inset-0 h-full w-full" theme="bright" ariaLabel="Flat world map with six regional economic hubs">
               {RIPPLE_CONNECTIONS.map(([fromKey, toKey]) => {
                 const from = regions[fromKey];
@@ -259,19 +259,19 @@ export default function RippleEconomyGame() {
           </div>
         </section>
 
-        <section className="ripple-clay-panel order-3 p-4 xl:col-start-2 xl:row-start-2" aria-live="polite">
+        <section className="ripple-clay-panel ripple-fit-results" aria-live="polite">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-[#2f658e]">
             Event Results
           </p>
           {lastResult ? (
-            <div key={lastResult.id} className="ripple-result-card mt-4 p-4">
+            <div key={lastResult.id} className="ripple-result-card ripple-fit-result-card mt-3">
               <p className="font-mono text-sm font-semibold uppercase tracking-[0.14em] text-[#0f2e4c]">
                 EVENT: {lastResult.label}
               </p>
               <p className="mt-2 text-sm leading-relaxed text-[#315a78]">
                 Origin: {lastResult.originLabel}
               </p>
-              <ul className="mt-4 grid gap-2 text-sm text-[#244c68]">
+              <ul className="mt-3 grid gap-1.5 text-sm text-[#244c68]">
                 {lastResult.changes.map((change) => (
                   <li key={change.key} className="flex items-start justify-between gap-3 border-t border-[#96c2df]/50 pt-2">
                     <span>{change.label} stability changed by {formatSignedDelta(change.delta)}</span>
@@ -281,7 +281,7 @@ export default function RippleEconomyGame() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 grid gap-2 rounded-[14px] bg-[#d9effb] p-3 font-mono text-[11px] uppercase tracking-[0.12em] text-[#315a78] shadow-[inset_0_2px_6px_rgba(70,130,170,0.22)]">
+              <div className="mt-3 grid gap-1.5 rounded-[14px] bg-[#d9effb] p-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[#315a78] shadow-[inset_0_2px_6px_rgba(70,130,170,0.22)]">
                 <div className="flex justify-between gap-3">
                   <span>Previous Global</span>
                   <span className="font-semibold text-[#0f2e4c]">{formatPercent(lastResult.previousGlobal)}</span>
@@ -295,7 +295,7 @@ export default function RippleEconomyGame() {
                   <span className="font-semibold text-[#0f2e4c]">{formatSignedDelta(lastResult.netGlobalChange)}</span>
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-relaxed text-[#244c68]">
+              <p className="mt-3 text-sm leading-relaxed text-[#244c68]">
                 Global Stability {globalDirection} by {formatMagnitude(lastResult.netGlobalChange)}.
               </p>
               <p className="mt-2 text-sm leading-relaxed text-[#244c68]">
@@ -303,7 +303,7 @@ export default function RippleEconomyGame() {
               </p>
             </div>
           ) : (
-            <div className="ripple-clay-inset mt-4 p-4">
+            <div className="ripple-clay-inset mt-3 p-3">
               <p className="text-base leading-relaxed text-[#315a78]">
                 Trigger an event to send a policy or shock ripple across the map.
               </p>
@@ -311,7 +311,7 @@ export default function RippleEconomyGame() {
           )}
         </section>
 
-        <section className="order-4 grid gap-3 md:hidden" aria-label="Region stability list">
+        <section className="ripple-fit-region-list" aria-label="Region stability list">
           {Object.entries(regions).map(([key, region]) => (
             <RegionListCard key={key} region={region} />
           ))}

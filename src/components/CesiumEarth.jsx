@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
-import SlidePanel from './SlidePanel';
-import MapHud from './MapHud';
 import EarthLoadingState from './EarthLoadingState';
 import { destinations } from '../lib/data/destinations';
 import {
@@ -9,27 +7,10 @@ import {
   setCameraPose,
   panToPose,
   zoomThroughEarthLayers,
-  lerpMapboxPoses,
   readCameraAsMapboxPose,
   projectLngLat,
 } from '../lib/cesium/cameraController';
 
-const ROME_SLIDE = {
-  tag: 'Field note',
-  subTitle: 'Rome descent',
-  title: 'Colosseum',
-  summary:
-    'Ancient Roman amphitheater, the largest ever built. It anchors the transition from the Rome descent into the global destination journey.',
-  points: [
-    { label: 'Built', text: '70-80 AD' },
-    { label: 'Location', text: 'Rome, Italy' },
-  ],
-  example:
-    'Scroll onward to keep the same globe in view as it rotates through twelve historical and cultural stops.',
-};
-
-const ROME = [12.4964, 41.9028];
-const COLOSSEUM = { center: [12.49143, 41.89191] };
 const EARTH_IDLE_CENTER = [12.4922, 22];
 const EARTH_OVERVIEW_ZOOM = 1.12;
 const EARTH_ROTATION_DEGREES_PER_SECOND = 0.82;
@@ -71,20 +52,6 @@ function SetupErrorState({ message }) {
   );
 }
 
-// Mapbox-shaped keyframes kept unchanged so visual tuning notes from the
-// original component still apply 1:1. They are converted to Cesium poses at
-// the boundary by lerpMapboxPoses().
-const ROME_KEYFRAMES = {
-  earth: {
-    start: { center: EARTH_IDLE_CENTER, zoom: EARTH_OVERVIEW_ZOOM, pitch: 0, bearing: 0 },
-    mid: { center: ROME, zoom: 5.5, pitch: 38, bearing: -16 },
-  },
-  city: {
-    mid: { center: ROME, zoom: 5.5, pitch: 38, bearing: -16 },
-    end: { center: COLOSSEUM.center, zoom: 17.79, pitch: 59.5, bearing: 336.8 },
-  },
-};
-
 // Per-destination camera framing. Mapbox-shaped (zoom/pitch/bearing) for parity
 // with the original tuning comments; converted on use.
 const DESTINATION_VIEW_OVERRIDES = {
@@ -109,8 +76,6 @@ const DESTINATION_VIEW_OVERRIDES = {
   'magellan-landing-site': { zoom: 17.25, pitch: 67.6, bearing: 260.9, altitude: 0 },
 };
 
-const easeInOutCubic = (t) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const wrapLongitude = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
 
 function prefersReducedMotion() {
@@ -132,41 +97,6 @@ function getDestinationTourState() {
   const active = !!window.destinationTourActive;
   const state = window.destinationTourState || { index: 0, progress: 0 };
   return { active, index: state.index ?? 0, progress: state.progress ?? 0 };
-}
-
-// ── Rome scrub ─────────────────────────────────────────────────────────────
-// Two-phase, scrub-driven (no animation). Drives the camera with a per-frame
-// setView() based on window.romeScrollProgress.
-function applyRomeScrollState(viewer, progress, codex) {
-  if (codex.userInteracting) return;
-  const idleAlt = codex.elevations.get('EARTH_IDLE') ?? 0;
-  const romeAlt = codex.elevations.get('ROME') ?? 20;
-  const colossAlt = DESTINATION_VIEW_OVERRIDES['colosseum']?.altitude ?? codex.elevations.get('colosseum') ?? 30;
-  let pose;
-  if (progress < 0.5) {
-    const t = easeInOutCubic(progress / 0.5);
-    pose = lerpMapboxPoses(ROME_KEYFRAMES.earth.start, ROME_KEYFRAMES.earth.mid, t, idleAlt, romeAlt);
-  } else {
-    const t = easeInOutCubic((progress - 0.5) / 0.5);
-    pose = lerpMapboxPoses(ROME_KEYFRAMES.city.mid, ROME_KEYFRAMES.city.end, t, romeAlt, colossAlt);
-  }
-  setCameraPose(viewer, pose);
-  codex.lastAppliedPose = pose;
-}
-
-function applyRomeReducedMotionState(viewer, progress, codex) {
-  if (codex.userInteracting) return;
-  const pose = progress >= 0.5
-    ? poseFromMapbox(
-      { center: COLOSSEUM.center, zoom: 17.79, pitch: 59.5, bearing: 336.8 },
-      DESTINATION_VIEW_OVERRIDES['colosseum']?.altitude ?? codex.elevations.get('colosseum') ?? 30,
-    )
-    : poseFromMapbox(
-      { center: EARTH_IDLE_CENTER, zoom: EARTH_OVERVIEW_ZOOM, pitch: 0, bearing: 0 },
-      codex.elevations.get('EARTH_IDLE') ?? 0,
-    );
-  setCameraPose(viewer, pose);
-  codex.lastAppliedPose = pose;
 }
 
 // ── Destination tour ───────────────────────────────────────────────────────
@@ -209,37 +139,52 @@ function applyDestinationTourState(viewer, tourState, codex) {
     codex.cancelActivePan = null;
   }
 
-  // The starting pose for the staged zoom is the last pose we applied (Rome
-  // scrub end, idle rotation tick, or the previous landmark). If no prior
-  // driver has run yet, the zoom blooms out from the destination and settles
-  // back into the tuned local camera.
+  // The starting pose for the staged zoom is the last pose we applied (idle
+  // rotation tick or the previous landmark). If no prior driver has run yet,
+  // the zoom blooms out from the destination and settles back into the tuned
+  // local camera.
   const startPose = codex.lastAppliedPose ?? pose;
 
   window.codexDestinationFlying = true;
   const flightToken = Symbol('codex-flight');
   codex.activeFlightToken = flightToken;
 
-  // Three-layer transition: pull back to Earth scale, reframe at regional
-  // altitude, then descend into the tuned landmark camera.
+  const finishFlight = () => {
+    if (codex.activeFlightToken === flightToken) {
+      window.codexDestinationFlying = false;
+      codex.lastAppliedPose = pose;
+      codex.cancelActivePan = null;
+    }
+  };
+
+  const cancelFlight = () => {
+    if (codex.activeFlightToken === flightToken) {
+      window.codexDestinationFlying = false;
+      codex.cancelActivePan = null;
+    }
+  };
+
+  if (tourState.index === 0) {
+    codex.cancelActivePan = panToPose(viewer, startPose, pose, {
+      durationSec: 1.8,
+      arcRangeM: 0,
+      isInteracting: () => codex.userInteracting,
+      complete: finishFlight,
+      cancel: cancelFlight,
+    });
+    return;
+  }
+
+  // Three-layer transition for later landmarks: pull back to Earth scale,
+  // reframe at regional altitude, then descend into the tuned landmark camera.
   codex.cancelActivePan = zoomThroughEarthLayers(viewer, startPose, pose, {
     isInteracting: () => codex.userInteracting,
-    complete: () => {
-      if (codex.activeFlightToken === flightToken) {
-        window.codexDestinationFlying = false;
-        codex.lastAppliedPose = pose;
-        codex.cancelActivePan = null;
-      }
-    },
-    cancel: () => {
-      if (codex.activeFlightToken === flightToken) {
-        window.codexDestinationFlying = false;
-        codex.cancelActivePan = null;
-      }
-    },
+    complete: finishFlight,
+    cancel: cancelFlight,
   });
 }
 
-// ── Idle Earth (between Rome and the first landmark) ───────────────────────
+// ── Idle Earth (between topic panels and the destination tour) ─────────────
 // Slow autonomous rotation with subtle bobbing + banking. Reads
 // window.globeTargetDirection to lean the globe left/right while the user
 // scrolls between section panels.
@@ -287,17 +232,13 @@ function buildEarthIdleDriver() {
   };
 }
 
-export default function CesiumEarth() {
+export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
   const containerRef = useRef(null);
   const containerOuterRef = useRef(null);
   const viewerRef = useRef(null);
+  const visualReadyNotifiedRef = useRef(false);
   const [setupError, setSetupError] = useState('');
-  const [showRomeSlide, setShowRomeSlide] = useState(false);
   const [tilesVisualReady, setTilesVisualReady] = useState(false);
-  // The HUD mounts via state so it re-renders once the viewer is ready. Stored
-  // as a wrapped object so MapHud receives the same `map` interface
-  // it always had (getCenter/getZoom/getPitch/getBearing + .on/.off).
-  const [hudShim, setHudShim] = useState(null);
   // True while the Photorealistic 3D Tiles streamer has pending tile requests.
   // Drives the small "Loading 3D tiles" badge in the corner so the user knows
   // why the view is still sharpening.
@@ -311,6 +252,22 @@ export default function CesiumEarth() {
     : !ionToken
       ? 'Missing VITE_CESIUM_ION_TOKEN in the local or Vercel environment'
       : setupError;
+
+  // Notify the parent once the photorealistic tiles are visually ready so the
+  // boot loading screen can release the first-render gate. Ref-guarded so a
+  // changing callback identity can't fire it twice.
+  useEffect(() => {
+    if (tilesVisualReady && !visualReadyNotifiedRef.current) {
+      visualReadyNotifiedRef.current = true;
+      onVisualReady?.();
+    }
+  }, [tilesVisualReady, onVisualReady]);
+
+  // Surface setup/tile failures upward so the boot loader stops waiting and the
+  // SetupErrorState below becomes visible instead of an infinite loader.
+  useEffect(() => {
+    if (initialSetupError) onSetupError?.();
+  }, [initialSetupError, onSetupError]);
 
   useEffect(() => {
     if (!googleApiKey || !ionToken) return undefined;
@@ -379,10 +336,10 @@ export default function CesiumEarth() {
     };
     const INTERACTION_COOLDOWN_MS = 1500;
 
-    // Initial camera: globe overview (Rome under the cursor, same as the
-    // original initial mapboxgl.Map config).
+    // Initial camera: neutral globe overview. Colosseum is reached only by
+    // activating destination 1, avoiding a duplicate pre-tour Colosseum zoom.
     const initialPose = poseFromMapbox({
-      center: COLOSSEUM.center,
+      center: EARTH_IDLE_CENTER,
       zoom: EARTH_OVERVIEW_ZOOM,
       pitch: 0,
       bearing: 0,
@@ -391,11 +348,10 @@ export default function CesiumEarth() {
     codex.lastAppliedPose = initialPose;
 
     // ── window.codexMap shim ────────────────────────────────────────────────
-    // Provides the four methods Content.jsx and MapHud.jsx rely on:
+    // Provides the Mapbox-like methods the DOM scrollytelling layer relies on:
     //   project([lon, lat]) - for the Colosseum SVG connector lines.
-    //   getCenter / getZoom / getPitch / getBearing - for MapHud readout.
-    //   on / off - MapHud subscribes to move/zoom/rotate/pitch; we coalesce
-    //     all four onto Cesium's single camera.changed event.
+    //   getCenter / getZoom / getPitch / getBearing - for camera parity.
+    //   on / off - coalesced onto Cesium's single camera.changed event.
     const cameraChangedListeners = new Set();
     const onCameraChanged = () => {
       cameraChangedListeners.forEach((fn) => fn());
@@ -422,8 +378,6 @@ export default function CesiumEarth() {
       _viewer: viewer,
     };
     window.codexMap = mapShim;
-    setHudShim(mapShim);
-
     // ── Google Photorealistic 3D Tiles ──────────────────────────────────────
     let tileset = null;
     let cancelledTilesetLoad = false;
@@ -514,7 +468,6 @@ export default function CesiumEarth() {
         // very first visit then correct themselves on subsequent flights.
         const sampleTargets = [
           { id: 'EARTH_IDLE', lon: EARTH_IDLE_CENTER[0], lat: EARTH_IDLE_CENTER[1] },
-          { id: 'ROME', lon: ROME[0], lat: ROME[1] },
           ...destinations.map((d) => ({ id: d.id, lon: d.lon, lat: d.lat })),
         ];
         const cartographics = sampleTargets.map((p) =>
@@ -580,7 +533,6 @@ export default function CesiumEarth() {
     const applyEarthIdleRotation = buildEarthIdleDriver();
     let frameId = 0;
     let lastTime = performance.now();
-    let lastSlideOpen = false;
     const reducedMotion = prefersReducedMotion();
 
     const tick = (time) => {
@@ -589,30 +541,8 @@ export default function CesiumEarth() {
       const viewerNow = viewerRef.current;
       if (!viewerNow || viewerNow.isDestroyed()) return;
 
-      const romeProgress = window.romeScrollProgress || 0;
-      const inRomeMode = !!window.romeModeActive;
-
-      if (inRomeMode) {
-        codex.destinationActiveIndex = null;
-        if (reducedMotion) applyRomeReducedMotionState(viewerNow, romeProgress, codex);
-        else applyRomeScrollState(viewerNow, romeProgress, codex);
-
-        const wantSlideOpen = romeProgress >= 0.92;
-        if (wantSlideOpen !== lastSlideOpen) {
-          lastSlideOpen = wantSlideOpen;
-          setShowRomeSlide(wantSlideOpen);
-        }
-
-        frameId = requestAnimationFrame(tick);
-        return;
-      }
-
       const tourState = getDestinationTourState();
       if (tourState.active) {
-        if (lastSlideOpen) {
-          lastSlideOpen = false;
-          setShowRomeSlide(false);
-        }
         applyDestinationTourState(viewerNow, tourState, codex);
         frameId = requestAnimationFrame(tick);
         return;
@@ -620,10 +550,6 @@ export default function CesiumEarth() {
 
       // Idle mode: clear destination flight state and rotate slowly.
       codex.destinationActiveIndex = null;
-      if (lastSlideOpen) {
-        lastSlideOpen = false;
-        setShowRomeSlide(false);
-      }
 
       const camHeight = viewerNow.camera.positionCartographic.height;
       const recentlyInteracted = (time - codex.lastInteractionAt) < INTERACTION_COOLDOWN_MS;
@@ -642,15 +568,11 @@ export default function CesiumEarth() {
 
     // ── Reset Globe ────────────────────────────────────────────────────────
     const handleResetGlobe = () => {
-      window.romeModeActive = false;
-      window.romeScrollProgress = 0;
       window.destinationTourActive = false;
       window.destinationTourState = { index: 0, progress: 0 };
       window.codexDestinationFlying = false;
       codex.destinationActiveIndex = null;
       codex.activeFlightToken = null;
-      setShowRomeSlide(false);
-
       const target = poseFromMapbox({
         center: EARTH_IDLE_CENTER,
         zoom: EARTH_OVERVIEW_ZOOM,
@@ -714,7 +636,6 @@ export default function CesiumEarth() {
       }
       cameraChangedListeners.clear();
       if (window.codexMap === mapShim) delete window.codexMap;
-      setHudShim(null);
       viewerRef.current = null;
       try { viewer.destroy(); } catch { /* ignore */ }
     };
@@ -726,8 +647,8 @@ export default function CesiumEarth() {
      ping-pong sections, translate the outer container via CSS.
      The camera logic (tilt/zoom/longitude nudge) is untouched -
      this only shifts the rendered output.
-     Suppressed during Rome descent and destination tour so those
-     framings remain centered on their targets. */
+     Suppressed during the destination tour so those framings remain
+     centered on their targets. */
   useEffect(() => {
     const container = containerOuterRef.current;
     if (!container) return undefined;
@@ -747,7 +668,6 @@ export default function CesiumEarth() {
     const tick = () => {
       const targetCentered =
         window.destinationTourActive
-        || window.romeModeActive
         || window.projectsFinaleActive;
       const dir = targetCentered ? 0 : (window.globeTargetDirection || 0);
       if (dir !== lastDir) {
@@ -774,8 +694,6 @@ export default function CesiumEarth() {
         {!tilesVisualReady && !initialSetupError && <EarthLoadingState label="" />}
       </div>
 
-      <MapHud map={hudShim} />
-
       {(tilesStreaming || !tilesVisualReady) && !initialSetupError && (
         <div className="pointer-events-none fixed bottom-3 right-3 z-40 flex items-center gap-2 rounded-full border border-white/[0.14] bg-bg/[0.68] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-white/80 shadow-lg backdrop-blur-md">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
@@ -784,12 +702,6 @@ export default function CesiumEarth() {
       )}
 
       {initialSetupError && <SetupErrorState message={initialSetupError} />}
-
-      <SlidePanel
-        open={showRomeSlide}
-        onClose={() => setShowRomeSlide(false)}
-        slide={ROME_SLIDE}
-      />
     </>
   );
 }

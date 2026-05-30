@@ -3,7 +3,6 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { destinations, journeyNavItems } from '../lib/data/destinations';
-import { projects } from '../lib/data/projects';
 import LandmarkTitleCard from './LandmarkTitleCard';
 import ProjectsFinale from './ProjectsFinale';
 import SplitWords from './SplitWords';
@@ -22,7 +21,7 @@ const sections = [
     subTitle: 'The Global Village',
     headlineLines: ['The', 'global', 'village'],
     summary:
-      'Culture moves through music, language, food, art, film, and daily habits. Globalization lets people adopt, adapt, and exchange cultural expression beyond their own society.',
+      "Culture in the context of globalization refers to the movement and mixing of ideas, values, art, language, food, and lifestyle across national borders. It is the process by which people adopt, adapt, and exchange cultural expressions beyond their own society. Examples include the global spread of K-pop music, the worldwide popularity of Japanese anime, the dominance of Hollywood films, or the fact that English has become the default language of international business and academia. Globalization doesn't simply erase cultures - it blends them, creating new hybrid identities that are simultaneously local and global.",
     points: [
       {
         label: 'Exchange',
@@ -44,7 +43,7 @@ const sections = [
     subTitle: 'The Engine',
     headlineLines: ['The', 'global', 'economy'],
     summary:
-      'Economic globalization links national economies through trade, investment, supply chains, and financial markets into one interdependent system.',
+      'Economic globalization refers to the integration of national economies through trade, investment, supply chains, and financial markets into a single, interdependent global system. It is driven by transnational corporations (TNCs), free trade agreements, and foreign direct investment (FDI). Examples include a car assembled in Germany using steel from Brazil, microchips from Taiwan, and rubber from Malaysia - or a Filipino call center worker serving customers in the United States. The global economy means that a recession in one major country, a blocked shipping canal, or a new tariff policy can ripple across dozens of nations almost immediately.',
     points: [
       {
         label: 'Drivers',
@@ -66,7 +65,7 @@ const sections = [
     subTitle: 'The Shared Home',
     headlineLines: ['The', 'shared', 'home'],
     summary:
-      'Environmental globalization shows that air, oceans, climate, and biodiversity ignore political borders, making ecological problems shared problems.',
+      'Environmental globalization refers to the reality that ecological systems - air, oceans, climate, and biodiversity - do not respect national borders, making environmental challenges inherently global problems that require global solutions. It encompasses climate change, deforestation, ocean pollution, and the cross-border movement of environmental harm. For example, carbon emissions produced in industrialized nations raise sea levels that threaten Pacific Island communities, and plastic waste from one continent washes onto the beaches of another. The environment is the clearest proof that globalization is not just an economic or political phenomenon - it is a shared condition of human survival.',
     points: [
       {
         label: 'Shared systems',
@@ -88,7 +87,7 @@ const sections = [
     subTitle: 'The Rules of the Game',
     headlineLines: ['The', 'rules of', 'the game'],
     summary:
-      'Political globalization creates institutions, treaties, and agreements for cooperation, negotiation, and dispute resolution.',
+      'Political globalization refers to the development of international institutions, treaties, and agreements that govern how nations interact, cooperate, and resolve disputes. It includes bodies like the United Nations (UN), the World Trade Organization (WTO), and the International Monetary Fund (IMF), which set the rules for diplomacy, trade, and economic conduct. Examples include the Paris Climate Agreement, UN peacekeeping missions, or WTO trade dispute rulings between major economies. Essentially, political globalization is the attempt to manage a deeply interconnected world through shared rules - even when nations fundamentally disagree.',
     points: [
       {
         label: 'Institutions',
@@ -110,7 +109,7 @@ const sections = [
     subTitle: 'The Nervous System',
     headlineLines: ['The', 'nervous', 'system'],
     summary:
-      'Technology provides the networks and tools that let information, money, goods, services, and people coordinate across distance almost instantly.',
+      'Technology refers to the tools, networks, and digital systems that connect the world and enable the near-instant flow of information, goods, and services across borders. It includes the internet, smartphones, artificial intelligence, and the physical infrastructure - like undersea cables and satellites - that keeps the global system running. For example, a video call between a student in the Philippines and a professor in the UK, or a payment sent from a worker abroad to their family back home in seconds, are both everyday acts of technological globalization. Without this sector, none of the others could function at their current speed or scale.',
     points: [
       {
         label: 'Infrastructure',
@@ -169,66 +168,13 @@ const TECHNOLOGY_PANEL_HOLD_MS = 1200;
 const TECHNOLOGY_SNAP_GUARD_MS = 2200;
 const TECHNOLOGY_GESTURE_QUIET_MS = 1200;
 
-function IntroHero({ onBegin, onAtlas }) {
-  const metrics = [
-    { value: sections.length, label: 'systems' },
-    { value: destinations.length, label: 'landmarks' },
-    { value: projects.length, label: 'visual essays' },
-  ];
-
+function IntroHero() {
   return (
     <section
       className="relative min-h-[100dvh] w-full overflow-hidden"
-      aria-labelledby="intro-hero-title"
+      aria-hidden="true"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_42%,rgba(242,109,91,0.18),transparent_34%),linear-gradient(90deg,rgba(5,7,14,0.78),rgba(5,7,14,0.18)_52%,rgba(5,7,14,0.7))]" />
-      <div className="pointer-events-auto relative z-20 mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col justify-end px-5 pb-24 pt-28 sm:px-8 md:pb-20 lg:justify-center lg:px-10">
-        <div className="grid items-end gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
-          <div className="max-w-5xl">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
-              Contemporary world atlas
-            </p>
-            <h1
-              id="intro-hero-title"
-              className="mt-5 max-w-5xl font-display text-[clamp(2.75rem,8vw,5.5rem)] font-semibold leading-[0.98] tracking-normal text-white"
-            >
-              Globalization in motion
-            </h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/[0.82] sm:text-lg">
-              Explore how culture, capital, climate, power, and technology move across one shared planet.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={onBegin}
-                className="cursor-pointer rounded-full bg-white px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-bg shadow-[0_16px_42px_rgba(0,0,0,0.36)] transition-colors duration-200 hover:bg-primary hover:text-bg focus-visible:outline-primary"
-              >
-                Begin journey
-              </button>
-              <button
-                type="button"
-                onClick={onAtlas}
-                className="cursor-pointer rounded-full border border-white/[0.18] bg-white/[0.08] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-xl transition-colors duration-200 hover:border-primary/80 hover:bg-primary/[0.12] focus-visible:outline-primary"
-              >
-                Open atlas
-              </button>
-            </div>
-          </div>
-
-          <dl className="grid gap-3 border-l border-white/[0.12] pl-5 sm:grid-cols-3 sm:border-l-0 sm:border-t sm:pl-0 sm:pt-5 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            {metrics.map((metric) => (
-              <div key={metric.label}>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-                  {metric.label}
-                </dt>
-                <dd className="mt-1 text-3xl font-semibold text-white">
-                  {metric.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_66%_42%,rgba(242,109,91,0.09),transparent_32%),linear-gradient(90deg,rgba(5,7,14,0.26),rgba(5,7,14,0.05)_52%,rgba(5,7,14,0.34))]" />
     </section>
   );
 }
@@ -394,7 +340,7 @@ function ContentSection({ sec, index, onActive, onLeave }) {
             Always text-left (ragged-right) regardless of which corner
             it lives in - matches the editorial reference. */}
         <div
-          className={`content-panel-copy pointer-events-auto absolute bottom-[18dvh] ${microcopyPos} flex w-[88vw] max-w-[22rem] flex-col gap-4 rounded-[6px] border border-white/[0.10] bg-bg/[0.58] p-4 text-left shadow-[0_24px_70px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:p-5 lg:bottom-[10dvh]`}
+          className={`content-panel-copy pointer-events-auto absolute bottom-[18dvh] ${microcopyPos} flex w-[88vw] max-w-[26rem] flex-col gap-3 rounded-[6px] border border-white/[0.10] bg-bg/[0.58] p-4 text-left shadow-[0_24px_70px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:p-5 lg:bottom-[10dvh]`}
         >
           <SplitWords
             as="span"
@@ -406,27 +352,6 @@ function ContentSection({ sec, index, onActive, onLeave }) {
             text={sec.summary}
             className="text-[13px] leading-[1.6] text-white/[0.86] sm:text-sm"
           />
-          <a
-            href="#destination-colosseum"
-            className="self-start rounded-full border border-white/[0.16] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:border-primary/70 hover:text-primary focus-visible:outline-primary"
-            aria-label="Open landmark atlas"
-          >
-            <span aria-hidden="true">
-              <span
-                className="split-word"
-                style={{ display: 'inline-block', willChange: 'transform, opacity' }}
-              >
-                Open
-              </span>
-              {' '}
-              <span
-                className="split-word"
-                style={{ display: 'inline-block', willChange: 'transform, opacity' }}
-              >
-                atlas
-              </span>
-            </span>
-          </a>
         </div>
       </div>
     </section>
@@ -571,8 +496,6 @@ export default function Content({ lenisRef }) {
 
   /* ── ScrollTrigger wiring ───────────────────────────────── */
   useEffect(() => {
-    window.romeModeActive = false;
-    window.romeScrollProgress = 0;
     window.destinationTourActive = false;
     window.destinationTourState = { index: 0, progress: 0 };
     window.projectsFinaleActive = false;
@@ -699,7 +622,6 @@ export default function Content({ lenisRef }) {
       viewportSyncTrigger?.kill();
       syncTimers.forEach((timer) => window.clearTimeout(timer));
       ctx.revert();
-      window.romeModeActive = false;
       window.destinationTourActive = false;
       window.projectsFinaleUnlocked = false;
       window.projectsFinaleReady = false;
@@ -1043,6 +965,9 @@ export default function Content({ lenisRef }) {
     // CAPTURE PHASE - must fire BEFORE Lenis's bubble-phase listener,
     // otherwise Lenis's preventDefault locks the wheel event out of reach.
     const handleWheel = (e) => {
+      // Album Archive Mode owns all input - let its own listeners handle the
+      // wheel and never consume/scroll the world underneath.
+      if (window.projectsFinaleActive) return;
       // Block scroll while a snap is mid-flight, the map camera is still
       // flying, or the title-out animation is in progress.
       if (isSnapping || window.codexDestinationFlying || isTitleBusy()) {
@@ -1078,10 +1003,12 @@ export default function Content({ lenisRef }) {
     };
 
     const handleTouchStart = (e) => {
+      if (window.projectsFinaleActive) return;
       touchStartY = e.touches[0].clientY;
     };
 
     const handleTouchMove = (e) => {
+      if (window.projectsFinaleActive) return;
       if (touchStartY == null) return;
       const delta = touchStartY - e.touches[0].clientY;
       if (Math.abs(delta) < 4) return;
@@ -1099,6 +1026,7 @@ export default function Content({ lenisRef }) {
     };
 
     const handleTouchEnd = (e) => {
+      if (window.projectsFinaleActive) return;
       if (touchStartY == null) return;
 
       const touchEndY = e.changedTouches[0].clientY;
@@ -1183,69 +1111,27 @@ export default function Content({ lenisRef }) {
     }
   }, [scrollToElement, settleJourneyIndex, withTitleExit]);
 
-  const scrollToProjectsFinale = useCallback(() => {
-    const target = document.getElementById('projects-finale');
-    if (!target) return;
-
+  // Enter the isolated album archive overlay. The archive is a fixed full-screen
+  // layer (see ProjectsFinale -> createPortal), so we do NOT scroll the document
+  // here - that is exactly what used to let the world slide back into view.
+  const openAlbumArchive = useCallback(() => {
     withTitleExit(() => {
-      window.projectsFinaleTransitioning = true;
+      // Calm the world behind the overlay: clear any landmark title + tour state.
       visibleTitleIndexRef.current = -1;
       titlePhaseRef.current = 'hidden';
       setVisibleTitleIndex(-1);
       setTitlePhase('hidden');
       activeJourneyIndexRef.current = -1;
       setActiveJourneyIndex(-1);
-      setActiveSection(sections.length + destinations.length);
       window.destinationTourActive = false;
 
-      let didScroll = false;
-      let fallbackTimer = null;
-
-      const clearDestinationTitle = () => {
-        visibleTitleIndexRef.current = -1;
-        titlePhaseRef.current = 'hidden';
-        setVisibleTitleIndex(-1);
-        setTitlePhase('hidden');
-        activeJourneyIndexRef.current = -1;
-        setActiveJourneyIndex(-1);
-      };
-
-      const releaseFinaleTransition = () => {
-        window.projectsFinaleTransitioning = false;
-        clearDestinationTitle();
-      };
-
-      const scrollAfterReady = () => {
-        if (didScroll) return;
-        didScroll = true;
-        window.removeEventListener('projectsFinaleReady', scrollAfterReady);
-        if (fallbackTimer) window.clearTimeout(fallbackTimer);
-
-        window.requestAnimationFrame(() => {
-          ScrollTrigger.refresh();
-          window.requestAnimationFrame(() => {
-            const readyTarget = document.getElementById('projects-finale') || target;
-            const releaseTimer = window.setTimeout(releaseFinaleTransition, 1800);
-            scrollToElement(readyTarget, 0, () => {
-              window.clearTimeout(releaseTimer);
-              releaseFinaleTransition();
-            });
-          });
-        });
-      };
-
+      // Suspend global scrolling and activate archive mode via the unlock event
+      // (ProjectsFinale listens for it).
+      window.codexLenis?.stop?.();
       window.projectsFinaleUnlocked = true;
       window.dispatchEvent(new Event('projectsFinaleUnlock'));
-
-      if (window.projectsFinaleReady) {
-        scrollAfterReady();
-        return;
-      }
-
-      window.addEventListener('projectsFinaleReady', scrollAfterReady, { once: true });
-      fallbackTimer = window.setTimeout(scrollAfterReady, 700);
     });
-  }, [scrollToElement, withTitleExit]);
+  }, [withTitleExit]);
 
   const journeyNavActive = activeSection >= sections.length;
 
@@ -1281,40 +1167,51 @@ export default function Content({ lenisRef }) {
       </nav>
 
       <nav
-        className={`fixed right-8 top-1/2 z-50 hidden w-72 -translate-y-1/2 flex-col gap-1 rounded-[6px] border border-white/[0.08] bg-bg/[0.62] p-3 shadow-2xl backdrop-blur-2xl transition-opacity duration-300 pointer-events-auto lg:flex ${
+        className={`fixed right-5 top-1/2 z-50 hidden w-48 -translate-y-1/2 flex-col pr-4 transition-opacity duration-300 pointer-events-auto lg:flex ${
           journeyNavActive ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-label="Destination index"
       >
-        <div className="mb-3 border-b border-white/[0.08] px-2 pb-3 font-mono text-[9px] uppercase tracking-[0.24em] text-primary">
+        <span
+          className="pointer-events-none absolute bottom-0 right-0 top-0 w-px bg-white/55"
+          aria-hidden="true"
+        />
+        <div className="mb-2 pr-9 text-right font-mono text-[8px] font-semibold uppercase tracking-[0.28em] text-primary/80">
           Landmark atlas
         </div>
-        {journeyNavItems.map((item, i) => {
-          const isActive = activeJourneyIndex === i;
+        <div className="flex flex-col gap-0.5">
+          {journeyNavItems.map((item, i) => {
+            const isActive = activeJourneyIndex === i;
 
-          return (
-            <button
-              key={item.id}
-              type="button"
-              title={item.name}
-              onClick={() => scrollToJourney(i)}
-              className={`group relative flex cursor-pointer flex-col rounded-[5px] border-l px-3 py-2.5 text-left transition-all duration-200 ${
-                isActive
-                  ? 'border-l-primary bg-white/[0.06] text-white'
-                  : 'border-l-white/[0.08] text-muted hover:border-l-primary/60 hover:bg-white/[0.08] hover:text-white'
-              }`}
-              aria-current={isActive ? 'step' : undefined}
-              aria-label={`Jump to ${item.name}`}
-            >
-              <span className="w-full truncate font-mono text-[9px] uppercase tracking-[0.15em]">
-                {item.name}
-              </span>
-              <span className="mt-1 w-full truncate text-[11px] text-white/[0.46]">
-                {item.location}
-              </span>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={item.id}
+                type="button"
+                title={`${item.name} - ${item.location}`}
+                onClick={() => scrollToJourney(i)}
+                className={`group grid min-h-8 cursor-pointer grid-cols-[minmax(0,1fr)_2.1rem] items-center gap-3 rounded-none py-1.5 pl-1 pr-0 text-right font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-200 focus-visible:outline-primary ${
+                  isActive
+                    ? 'text-white'
+                    : 'text-white/42 hover:text-white/78'
+                }`}
+                aria-current={isActive ? 'step' : undefined}
+                aria-label={`Jump to ${item.name}`}
+              >
+                <span className={`truncate ${isActive ? 'font-bold' : 'font-semibold'}`}>
+                  {item.name}
+                </span>
+                <span
+                  className={`h-px justify-self-end transition-all duration-200 ${
+                    isActive
+                      ? 'w-8 bg-white'
+                      : 'w-4 bg-white/24 group-hover:w-6 group-hover:bg-white/55'
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       <button
@@ -1373,10 +1270,7 @@ export default function Content({ lenisRef }) {
         </div>
       )}
 
-      <IntroHero
-        onBegin={() => scrollTo(0)}
-        onAtlas={() => scrollToJourney(0)}
-      />
+      <IntroHero />
 
       {/* ─── SECTION PANELS ───
           Editorial typography over the live globe. Headline anchors to the
@@ -1439,8 +1333,8 @@ export default function Content({ lenisRef }) {
               >
                 <button
                   type="button"
-                  onClick={scrollToProjectsFinale}
-                  aria-label="Go to articles"
+                  onClick={openAlbumArchive}
+                  aria-label="Open album archive"
                   disabled={!isFinalDestinationVisible}
                   tabIndex={isFinalDestinationVisible ? undefined : -1}
                   className="cursor-pointer rounded-full border border-white/20 bg-white px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-bg shadow-[0_18px_45px_rgba(0,0,0,0.35)] outline-none transition-colors duration-200 hover:border-primary/70 hover:bg-primary hover:text-bg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"

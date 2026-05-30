@@ -63,24 +63,32 @@ export default function LandmarkTitleCard({
   const nameContainerRef = useRef(null);
   const discoverContainerRef = useRef(null);
   const eraContainerRef = useRef(null);
+  const descriptionContainerRef = useRef(null);
 
   const nameTokens = useMemo(() => tokenizeText(destination.name), [destination.name]);
   const eraTokens = useMemo(() => tokenizeText(destination.eraRange), [destination.eraRange]);
   const locationTokens = useMemo(() => tokenizeText(destination.location), [destination.location]);
+  const epochDescription = destination.epochDescription ?? destination.about;
+  const descriptionTokens = useMemo(
+    () => tokenizeText(epochDescription),
+    [epochDescription],
+  );
 
   useEffect(() => {
     const backdrop = backdropRef.current;
     const nameC = nameContainerRef.current;
     const discoverC = discoverContainerRef.current;
     const eraC = eraContainerRef.current;
-    if (!backdrop || !nameC || !discoverC || !eraC) return undefined;
+    const descriptionC = descriptionContainerRef.current;
+    if (!backdrop || !nameC || !discoverC || !eraC || !descriptionC) return undefined;
 
     // Each region collects its own word spans + the decorative discover line
     // (which is tagged `.split-word` so it animates alongside the two words).
     const nameWords = Array.from(nameC.querySelectorAll('.split-word'));
     const discoverWords = Array.from(discoverC.querySelectorAll('.split-word'));
     const eraWords = Array.from(eraC.querySelectorAll('.split-word'));
-    const allWords = [...nameWords, ...discoverWords, ...eraWords];
+    const descriptionWords = Array.from(descriptionC.querySelectorAll('.split-word'));
+    const allWords = [...nameWords, ...discoverWords, ...eraWords, ...descriptionWords];
     const allElements = [backdrop, ...allWords];
     gsap.killTweensOf(allElements);
 
@@ -114,6 +122,7 @@ export default function LandmarkTitleCard({
       gsap.set(nameWords, { opacity: 0, x: 0, y: 32 });
       gsap.set(discoverWords, { opacity: 0, x: 0, y: 20 });
       gsap.set(eraWords, { opacity: 0, x: 0, y: 36 });
+      gsap.set(descriptionWords, { opacity: 0, x: 0, y: 18 });
 
       const tl = gsap.timeline({
         onComplete: () => onEnterComplete?.(index),
@@ -146,6 +155,13 @@ export default function LandmarkTitleCard({
         ease: 'power3.out',
         stagger: 0.06,
       }, 0.32);
+      tl.to(descriptionWords, {
+        opacity: 1,
+        y: 0,
+        duration: 0.46,
+        ease: 'power3.out',
+        stagger: 0.01,
+      }, 0.42);
 
       return () => tl.kill();
     }
@@ -161,27 +177,34 @@ export default function LandmarkTitleCard({
       const tl = gsap.timeline({
         onComplete: () => onExitComplete?.(index),
       });
+      tl.to(descriptionWords, {
+        opacity: 0,
+        y: -18,
+        duration: 0.32,
+        ease: 'power2.in',
+        stagger: 0.01,
+      }, 0);
       tl.to(discoverWords, {
         opacity: 0,
         y: -18,
         duration: 0.32,
         ease: 'power2.in',
         stagger: 0.035,
-      }, 0);
+      }, 0.04);
       tl.to(nameWords, {
         opacity: 0,
         y: -22,
         duration: 0.38,
         ease: 'power2.in',
         stagger: 0.04,
-      }, 0.04);
+      }, 0.08);
       tl.to(eraWords, {
         opacity: 0,
         y: -26,
         duration: 0.44,
         ease: 'power2.in',
         stagger: 0.045,
-      }, 0.02);
+      }, 0.06);
       // Backdrop trails the text out so the scrim never lingers without text
       // on it (and is fully gone before the next camera flight begins).
       tl.to(backdrop, {
@@ -257,7 +280,7 @@ export default function LandmarkTitleCard({
         </div>
       </div>
 
-      <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-6">
+      <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center justify-center px-6">
         <span
           ref={eraContainerRef}
           className="landmark-era text-4xl tracking-normal sm:text-6xl md:text-7xl lg:text-8xl"
@@ -265,6 +288,12 @@ export default function LandmarkTitleCard({
         >
           <span aria-hidden="true">{renderWordTokens(eraTokens)}</span>
         </span>
+        <p
+          ref={descriptionContainerRef}
+          className="landmark-epoch-description"
+        >
+          {renderWordTokens(descriptionTokens)}
+        </p>
       </div>
     </div>
   );

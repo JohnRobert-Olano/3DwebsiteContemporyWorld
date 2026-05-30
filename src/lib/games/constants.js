@@ -9,9 +9,9 @@ const geo = (lon, lat) => ({
 export const DELIVERY_COUNTRIES = [
   { id: 'usa', name: 'USA', ...geo(-98, 39) },
   { id: 'brazil', name: 'Brazil', ...geo(-51, -10) },
+  { id: 'japan', name: 'Japan', ...geo(138, 36) },
   { id: 'germany', name: 'Germany', ...geo(10, 51) },
   { id: 'india', name: 'India', ...geo(79, 22) },
-  { id: 'japan', name: 'Japan', ...geo(138, 36) },
   { id: 'philippines', name: 'Philippines', ...geo(122, 12) },
   { id: 'south-korea', name: 'South Korea', ...geo(127, 37) },
 ];

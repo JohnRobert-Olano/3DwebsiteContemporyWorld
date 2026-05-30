@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DELIVERY_COUNTRIES, DELIVERY_EVENTS } from '../../lib/games/constants';
 import { chooseByRandom, createSeededRandom, hashStringToSeed } from '../../lib/games/helpers';
+import { routeControlPoint } from '../../lib/games/route';
 import FlatWorldMap from './FlatWorldMap';
 
-// Three.js plane is code-split so three/r3f only load when this game is opened.
+// three.js plane is heavy - lazy so it only ships when this cover is opened.
 const DeliveryPlane = lazy(() => import('./DeliveryPlane'));
+const DELIVERY_TRAVEL_MS = 1800;
 
 function getCountry(id) {
   return DELIVERY_COUNTRIES.find((country) => country.id === id) ?? DELIVERY_COUNTRIES[0];
@@ -23,6 +25,20 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
   const from = useMemo(() => getCountry(fromId), [fromId]);
   const to = useMemo(() => getCountry(toId), [toId]);
   const sameCountry = fromId === toId;
+  const isShipping = phase === 'shipping';
+  const showRoute = isShipping || phase === 'result';
+
+  // Quadratic flight arc in the map's viewBox units (0..360 x, 0..180 y). Shared
+  // control point so the plane (DeliveryPlane) traces the identical curve.
+  const routePath = useMemo(() => {
+    const cp = routeControlPoint(from, to);
+    const fmt = (x, y) => `${(x * 3.6).toFixed(2)} ${(y * 1.8).toFixed(2)}`;
+    return `M ${fmt(from.x, from.y)} Q ${fmt(cp.x, cp.y)} ${fmt(to.x, to.y)}`;
+  }, [from, to]);
+
+  const routeLabel = showRoute
+    ? `Shipping route from ${from.name} to ${to.name}`
+    : `World map. Route set from ${from.name} to ${to.name}.`;
 
   useEffect(() => {
     return () => window.clearTimeout(timerRef.current);
@@ -47,7 +63,7 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
   };
 
   const startShipment = () => {
-    if (sameCountry || phase === 'shipping') return;
+    if (sameCountry || isShipping) return;
     window.clearTimeout(timerRef.current);
     const event = chooseByRandom(DELIVERY_EVENTS, randomRef.current());
     setResult(null);
@@ -59,27 +75,32 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
       return;
     }
 
-    timerRef.current = window.setTimeout(() => finishShipment(event), 1800);
+    timerRef.current = window.setTimeout(() => finishShipment(event), DELIVERY_TRAVEL_MS);
   };
 
   return (
-    <div className="gds-clay min-h-full space-y-4">
-      <header className="gds-clay-card p-5">
-        <p className="gds-eyebrow">GLOBAL DELIVERY SIMULATOR</p>
-        <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <h4 className="max-w-xl text-2xl font-semibold leading-tight tracking-tight text-[#0f2e4c]">
-            Ship products between countries and overcome global disruptions.
-          </h4>
+    <div className="gds-ops gds-fit">
+      <header className="gds-ops-card gds-fit-header">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="gds-eyebrow">GLOBAL DELIVERY SIMULATOR</p>
+            <h4 className="mt-2 max-w-xl text-lg font-semibold leading-tight tracking-tight text-[#dbe8ff] sm:text-xl">
+              Ship products between countries and overcome global disruptions.
+            </h4>
+          </div>
           <div className="flex flex-wrap items-stretch gap-3">
-            <div className="gds-clay-inset flex items-center gap-2 px-4 py-3 font-mono text-sm font-semibold">
-              <span className="gds-counter-dot" aria-hidden="true" />
-              Successful Shipments: {successfulShipments}
+            <div className="gds-ops-metric">
+              <span className="gds-ops-metric__label">Successful Shipments</span>
+              <span className="gds-ops-metric__value">
+                <span className="gds-counter-dot" aria-hidden="true" />
+                {successfulShipments}
+              </span>
             </div>
             <button
               type="button"
               onClick={resetSimulator}
               aria-label="Reset delivery simulator"
-              className="gds-clay-btn gds-clay-btn--soft px-5 py-3"
+              className="gds-ops-btn gds-ops-btn--soft px-5"
             >
               Reset
             </button>
@@ -87,14 +108,15 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
         </div>
       </header>
 
-      <section className="gds-clay-card p-5">
-        <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+      <section className="gds-ops-card gds-fit-controls">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <label className="grid gap-2">
             <span className="gds-field-label">From Country</span>
             <select
               value={fromId}
               onChange={(event) => setFromId(event.target.value)}
-              className="gds-clay-select"
+              disabled={isShipping}
+              className="gds-ops-select"
             >
               {DELIVERY_COUNTRIES.map((country) => (
                 <option key={country.id} value={country.id}>{country.name}</option>
@@ -106,7 +128,8 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
             <select
               value={toId}
               onChange={(event) => setToId(event.target.value)}
-              className="gds-clay-select"
+              disabled={isShipping}
+              className="gds-ops-select"
             >
               {DELIVERY_COUNTRIES.map((country) => (
                 <option key={country.id} value={country.id}>{country.name}</option>
@@ -116,32 +139,28 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
           <button
             type="button"
             onClick={startShipment}
-            disabled={sameCountry || phase === 'shipping'}
-            className="gds-clay-btn gds-clay-btn--primary min-h-[48px] px-7"
+            disabled={sameCountry || isShipping}
+            className="gds-ops-btn gds-ops-btn--primary min-h-[48px] px-7"
           >
-            {phase === 'shipping' ? 'Shipping...' : 'Start Shipping'}
+            {isShipping ? 'SHIPPING...' : 'START SHIPPING'}
           </button>
         </div>
         {sameCountry && (
-          <p className="mt-3 text-xs font-semibold text-[#c2410c]">
+          <p className="mt-3 text-xs font-semibold text-[#ffb020]">
             Choose two different countries to begin a shipment.
           </p>
         )}
       </section>
 
-      <section className="gds-clay-card overflow-hidden p-4">
-        <div className="gds-clay-map delivery-map relative aspect-[2/1] overflow-hidden rounded-[16px]">
-          <FlatWorldMap theme="bright" className="absolute inset-0 h-full w-full" ariaLabel="World map showing the shipping route">
-            <line
-              x1={`${from.x}%`}
-              y1={`${from.y}%`}
-              x2={`${to.x}%`}
-              y2={`${to.y}%`}
-              stroke="rgba(18,52,88,0.55)"
-              strokeWidth="1.2"
-              strokeDasharray="3 3"
-              vectorEffect="non-scaling-stroke"
-            />
+      <section className="gds-ops-card gds-fit-map-card overflow-hidden">
+        <div className="gds-ops-map gds-fit-map relative overflow-hidden rounded-[16px]">
+          <FlatWorldMap theme="ops" className="absolute inset-0 h-full w-full" ariaLabel={routeLabel}>
+            {showRoute && (
+              <g key={`route-${routeKey}`}>
+                <path className="gds-route-path gds-route-path--glow" d={routePath} fill="none" vectorEffect="non-scaling-stroke" />
+                <path className="gds-route-path" d={routePath} fill="none" vectorEffect="non-scaling-stroke" />
+              </g>
+            )}
             {DELIVERY_COUNTRIES.map((country) => {
               const selected = country.id === fromId || country.id === toId;
               return (
@@ -149,9 +168,9 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
                   key={country.id}
                   cx={`${country.x}%`}
                   cy={`${country.y}%`}
-                  r={selected ? 3 : 1.8}
-                  fill={selected ? '#ef5b43' : '#ffffff'}
-                  stroke="rgba(18,52,88,0.5)"
+                  r={selected ? 3 : 1.7}
+                  fill={selected ? '#ffb020' : '#bfe6ff'}
+                  stroke="rgba(6,18,31,0.7)"
                   strokeWidth="0.6"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -164,21 +183,35 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
           <span className="delivery-label" style={{ left: `${to.x}%`, top: `${to.y}%` }}>
             {to.name}
           </span>
-          <Suspense fallback={null}>
-            <DeliveryPlane
-              from={from}
-              to={to}
-              phase={phase}
-              routeKey={routeKey}
-              reducedMotion={reducedMotion}
-            />
-          </Suspense>
+          {showRoute && (
+            <Suspense
+              fallback={
+                <span
+                  className="gds-plane-fallback"
+                  style={{ left: `${from.x}%`, top: `${from.y}%` }}
+                  aria-hidden="true"
+                />
+              }
+            >
+              <DeliveryPlane
+                from={from}
+                to={to}
+                phase={phase}
+                routeKey={routeKey}
+                reducedMotion={reducedMotion}
+                travelMs={DELIVERY_TRAVEL_MS}
+              />
+            </Suspense>
+          )}
         </div>
       </section>
 
-      <section className="gds-clay-card p-5" aria-live="polite">
+      <section className="gds-ops-card gds-fit-result" aria-live="polite">
         <p className="gds-eyebrow">Shipment result</p>
-        <div className="gds-clay-inset mt-3 flex items-start gap-3 p-4">
+        <div
+          key={result ? `${routeKey}-${result.result}-${result.message}` : 'shipment-empty'}
+          className="gds-ops-inset gds-result-card-content mt-2 flex items-start gap-3 p-3"
+        >
           {result ? (
             <>
               <span
@@ -186,14 +219,14 @@ export default function GlobalDeliverySimulator({ reducedMotion }) {
                 aria-hidden="true"
               />
               <div>
-                <p className="font-mono text-sm font-bold uppercase tracking-[0.16em] text-[#0f2e4c]">
+                <p className="font-mono text-sm font-bold uppercase tracking-[0.16em] text-[#e6f3ff]">
                   {result.result}
                 </p>
-                <p className="mt-1 text-sm text-[#3f6b8e]">{result.message}</p>
+                <p className="mt-1 text-sm text-[#94b8d6]">{result.message}</p>
               </div>
             </>
           ) : (
-            <p className="text-sm text-[#3f6b8e]">
+            <p className="text-sm text-[#94b8d6]">
               Select a route and start shipping to generate a global event.
             </p>
           )}

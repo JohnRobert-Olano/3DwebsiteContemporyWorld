@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { clamp } from '../../lib/games/helpers';
 import {
   calculateSalaryBreakdown,
@@ -11,6 +11,48 @@ import {
 const salarySliderId = 'salary-tax-monthly-slider';
 const salaryInputId = 'salary-tax-monthly-input';
 const salaryCurrentValueId = 'salary-tax-current-value';
+const SALARY_TUTORIAL_STEPS = [
+  {
+    title: 'Welcome',
+    marker: 'PAY',
+    copy: 'This simulator shows how gross monthly salary becomes estimated net take-home pay using the supplied 2026 Philippine payroll rules.',
+  },
+  {
+    title: 'Salary Input',
+    marker: 'RANGE',
+    copy: 'Use the Monthly Basic Salary slider or number input. The range is ₱10,000 to ₱1,500,000, and both inputs stay synced.',
+  },
+  {
+    title: 'Government Contributions',
+    marker: 'SSS',
+    copy: 'SSS, PhilHealth, and Pag-IBIG are deducted first. Each contribution follows statutory bases, caps, and ceilings.',
+  },
+  {
+    title: 'Taxable Income',
+    marker: 'BASE',
+    copy: 'Monthly taxable income is gross salary minus SSS, PhilHealth, and Pag-IBIG. Annual taxable income is monthly taxable income × 12.',
+  },
+  {
+    title: 'Withholding Tax',
+    marker: 'TRAIN',
+    copy: 'TRAIN income tax is calculated annually first, then divided by 12. Higher salaries move into higher tax brackets.',
+  },
+  {
+    title: 'Visual Breakdown Bar',
+    marker: 'BAR',
+    copy: 'The stacked bar splits gross salary into net pay, SSS, PhilHealth, Pag-IBIG, and withholding tax percentages.',
+  },
+  {
+    title: 'Net Take-Home Pay',
+    marker: 'NET',
+    copy: 'The hero metric is the estimated monthly pay left after statutory deductions and monthly withholding tax.',
+  },
+  {
+    title: 'Legal Context',
+    marker: 'NOTE',
+    copy: 'This is an educational standard-rule model. It excludes company allowances, de minimis benefits, 13th-month exemptions, and other conditional modifiers.',
+  },
+];
 
 function formatRate(value) {
   return `${value.toFixed(1)}%`;
@@ -19,36 +61,32 @@ function formatRate(value) {
 function BreakdownRow({ label, value, detail, isEmphasis = false }) {
   return (
     <div
-      className={`grid gap-1 border-t border-white/10 py-3 text-[15px] sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 ${
-        isEmphasis ? 'bg-[var(--game-accent)]/10 px-3 ring-1 ring-[var(--game-accent)]/25' : ''
+      className={`salary-summary-row ${
+        isEmphasis ? 'salary-summary-row--emphasis' : ''
       }`}
     >
       <div className="min-w-0">
-        <span className={isEmphasis ? 'font-semibold text-white' : 'text-white/62'}>{label}</span>
-        {detail && <p className="mt-1 text-xs leading-relaxed text-white/42">{detail}</p>}
+        <span>{label}</span>
+        {detail && <p>{detail}</p>}
       </div>
-      <span
-        className={`min-w-0 break-words font-mono text-sm font-semibold sm:text-right ${
-          isEmphasis ? 'text-[var(--game-accent)]' : 'text-white/82'
-        }`}
-      >
+      <strong>
         {value}
-      </span>
+      </strong>
     </div>
   );
 }
 
 function SegmentLegendItem({ label, value, percent, color }) {
   return (
-    <div className="album-game-inset min-w-0 p-3">
+    <div className="album-game-inset salary-segment-tile">
       <div className="flex items-center gap-2">
         <span className="h-3 w-3 flex-none rounded-[2px]" style={{ background: color }} aria-hidden="true" />
-        <span className="min-w-0 truncate font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+        <span className="min-w-0 truncate font-mono text-[9px] font-semibold uppercase tracking-[0.13em] text-white/55">
           {label}
         </span>
       </div>
-      <div className="mt-3 grid gap-1">
-        <span className="min-w-0 break-words font-mono text-sm font-semibold text-white">{formatPeso(value)}</span>
+      <div className="mt-1.5 grid gap-0.5">
+        <span className="min-w-0 break-words font-mono text-xs font-semibold text-white">{formatPeso(value)}</span>
         <span className="font-mono text-[11px] text-white/45">{formatRate(percent)} of gross</span>
       </div>
     </div>
@@ -56,14 +94,60 @@ function SegmentLegendItem({ label, value, percent, color }) {
 }
 
 export default function SalaryTaxSimulator() {
+  const tutorialCardRef = useRef(null);
   const [salary, setSalary] = useState(DEFAULT_MONTHLY_SALARY);
+  const [tutorialOpen, setTutorialOpen] = useState(true);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const breakdown = useMemo(() => calculateSalaryBreakdown(salary), [salary]);
+  const currentTutorialStep = SALARY_TUTORIAL_STEPS[tutorialStep];
 
   const setClampedSalary = (value) => {
     setSalary(Math.round(clamp(value, SALARY_MIN, SALARY_MAX)));
   };
 
   const resetSalary = () => setSalary(DEFAULT_MONTHLY_SALARY);
+
+  const finishTutorial = () => {
+    setTutorialOpen(false);
+    setTutorialStep(0);
+  };
+
+  const replayTutorial = () => {
+    setTutorialStep(0);
+    setTutorialOpen(true);
+  };
+
+  const goToNextTutorialStep = () => {
+    if (tutorialStep >= SALARY_TUTORIAL_STEPS.length - 1) {
+      finishTutorial();
+      return;
+    }
+    setTutorialStep((step) => step + 1);
+  };
+
+  const goToPreviousTutorialStep = () => {
+    setTutorialStep((step) => Math.max(0, step - 1));
+  };
+
+  useEffect(() => {
+    if (!tutorialOpen) return undefined;
+    const focusTimer = window.setTimeout(() => {
+      tutorialCardRef.current?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [tutorialOpen, tutorialStep]);
+
+  useEffect(() => {
+    if (!tutorialOpen) return undefined;
+    const stopTutorialEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+    };
+    window.addEventListener('keydown', stopTutorialEscape, true);
+    return () => window.removeEventListener('keydown', stopTutorialEscape, true);
+  }, [tutorialOpen]);
 
   const segments = [
     { key: 'net', label: 'Net Take-Home Pay', value: breakdown.netMonthlyPay, color: '#75d39a' },
@@ -76,20 +160,37 @@ export default function SalaryTaxSimulator() {
     percent: breakdown.monthlySalary > 0 ? (segment.value / breakdown.monthlySalary) * 100 : 0,
   }));
 
+  const summaryRows = [
+    { label: 'Gross Monthly Salary', value: formatPeso(breakdown.monthlySalary) },
+    { label: 'SSS employee share', value: formatPeso(breakdown.sss), detail: '5% employee share of clamped monthly salary credit.' },
+    { label: 'PhilHealth employee share', value: formatPeso(breakdown.philHealth), detail: '2.5% employee share after statutory base limits.' },
+    { label: 'Pag-IBIG employee share', value: formatPeso(breakdown.pagIbig), detail: '2% on a salary base capped at ₱10,000.00.' },
+    { label: 'Total Statutory Deductions', value: formatPeso(breakdown.totalStatutoryDeductions) },
+    { label: 'Monthly Taxable Income', value: formatPeso(breakdown.monthlyTaxableIncome) },
+    { label: 'Annual Taxable Income', value: formatPeso(breakdown.annualTaxableIncome) },
+    { label: 'Annual Income Tax', value: formatPeso(breakdown.annualTax) },
+    { label: 'Monthly Withholding Tax', value: formatPeso(breakdown.monthlyWithholdingTax) },
+    {
+      label: 'Total Deductions',
+      value: `${formatPeso(breakdown.totalDeductions)} (${formatRate(breakdown.deductionRate)} of gross)`,
+    },
+    { label: 'Final Net Take-Home Pay', value: formatPeso(breakdown.netMonthlyPay), isEmphasis: true },
+  ];
+
   return (
-    <div className="space-y-5 text-base">
-      <header className="album-game-card overflow-hidden p-4 sm:p-5" aria-labelledby="salary-tax-title">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] xl:items-stretch">
+    <div className="album-game-fit salary-fit relative text-base">
+      <header className="album-game-card album-game-panel-tight salary-control-panel" aria-labelledby="salary-tax-title">
+        <div className="salary-control-grid">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-white/45">2026 payroll model</p>
-            <h4 id="salary-tax-title" className="mt-2 text-2xl font-semibold tracking-normal text-white">
+            <h4 id="salary-tax-title" className="mt-1 text-xl font-semibold tracking-normal text-white sm:text-2xl">
               Philippine Salary & Tax Deduction Simulator
             </h4>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/62">
+            <p className="salary-subcopy mt-2 max-w-2xl text-sm leading-relaxed text-white/62">
               See how gross monthly basic salary becomes net take-home pay through statutory contributions and TRAIN withholding.
             </p>
 
-            <div className="mt-5 grid gap-4">
+            <div className="mt-3 grid gap-3">
               <div className="grid gap-2">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <label
@@ -117,6 +218,7 @@ export default function SalaryTaxSimulator() {
                   className="album-game-range"
                   aria-describedby={salaryCurrentValueId}
                   aria-label="Monthly basic salary slider"
+                  disabled={tutorialOpen}
                 />
                 <div className="flex justify-between font-mono text-[10px] text-white/38">
                   <span>{formatPeso(SALARY_MIN)}</span>
@@ -124,7 +226,7 @@ export default function SalaryTaxSimulator() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div className="salary-input-row">
                 <div className="grid min-w-0 gap-2">
                   <label htmlFor={salaryInputId} className="text-base font-medium text-white/78 sm:text-sm">
                     Salary amount
@@ -139,26 +241,34 @@ export default function SalaryTaxSimulator() {
                     value={salary}
                     onChange={(event) => setClampedSalary(event.target.value)}
                     className="album-game-input font-mono"
+                    disabled={tutorialOpen}
                   />
                 </div>
-                <button type="button" onClick={resetSalary} className="album-game-button min-h-11 cursor-pointer px-4 py-3">
-                  Reset
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  {!tutorialOpen && (
+                    <button type="button" onClick={replayTutorial} className="album-game-button min-h-10 cursor-pointer px-4 py-2.5">
+                      Replay Tutorial
+                    </button>
+                  )}
+                  <button type="button" onClick={resetSalary} disabled={tutorialOpen} className="album-game-button min-h-10 cursor-pointer px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-35">
+                    Reset
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="album-game-inset flex min-w-0 flex-col justify-between p-4 sm:p-5">
+          <div className="album-game-inset salary-net-hero">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/45">Net Take-Home Pay</p>
-              <p className="mt-3 min-w-0 break-words font-mono text-3xl font-semibold leading-tight text-white sm:text-4xl">
+              <p className="mt-2 min-w-0 break-words font-mono text-2xl font-semibold leading-tight text-white sm:text-3xl">
                 {formatPeso(breakdown.netMonthlyPay)}
               </p>
-              <p className="mt-3 text-base leading-relaxed text-white/55">
+              <p className="mt-2 text-sm leading-relaxed text-white/55">
                 {formatRate(100 - breakdown.deductionRate)} of gross remains after statutory deductions and monthly withholding.
               </p>
             </div>
-            <div className="mt-5 grid gap-2 border-t border-white/10 pt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-white/48">
+            <div className="mt-3 grid gap-1.5 border-t border-white/10 pt-3 font-mono text-[10px] uppercase tracking-[0.13em] text-white/48">
               <div className="flex justify-between gap-3">
                 <span>Total Deductions</span>
                 <span className="text-white/75">{formatPeso(breakdown.totalDeductions)}</span>
@@ -172,7 +282,7 @@ export default function SalaryTaxSimulator() {
         </div>
       </header>
 
-      <section className="album-game-card p-5" aria-labelledby="salary-breakdown">
+      <section className="album-game-card album-game-panel-tight salary-breakdown-panel" aria-labelledby="salary-breakdown">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h5 id="salary-breakdown" className="font-mono text-[10px] uppercase tracking-[0.26em] text-white/45">
             Gross Salary Breakdown
@@ -183,7 +293,7 @@ export default function SalaryTaxSimulator() {
         </div>
 
         <div
-          className="album-game-inset mt-4 flex h-10 overflow-hidden"
+          className="album-game-inset mt-3 flex h-7 overflow-hidden sm:h-9"
           aria-label={`Gross salary breakdown: net take-home pay ${formatPeso(breakdown.netMonthlyPay)}, SSS ${formatPeso(
             breakdown.sss,
           )}, PhilHealth ${formatPeso(breakdown.philHealth)}, Pag-IBIG ${formatPeso(
@@ -204,7 +314,7 @@ export default function SalaryTaxSimulator() {
           ))}
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="salary-segment-grid">
           {segments.map((segment) => (
             <SegmentLegendItem
               key={segment.key}
@@ -217,46 +327,100 @@ export default function SalaryTaxSimulator() {
         </div>
       </section>
 
-      <section className="album-game-card p-5" aria-labelledby="salary-summary">
+      <section className="album-game-card album-game-panel-tight salary-summary-panel" aria-labelledby="salary-summary">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <h5 id="salary-summary" className="font-mono text-[10px] uppercase tracking-[0.26em] text-white/45">
             Itemized Payroll Summary
           </h5>
-          <p className="text-sm text-white/48">All values recalculate instantly from monthly basic salary.</p>
+          <p className="salary-summary-hint text-sm text-white/48">All values recalculate instantly from monthly basic salary.</p>
         </div>
-        <div className="album-game-inset mt-3 px-4">
-          <BreakdownRow label="Gross Monthly Salary" value={formatPeso(breakdown.monthlySalary)} />
-          <BreakdownRow
-            label="SSS employee share"
-            value={formatPeso(breakdown.sss)}
-            detail="5% of monthly salary credit, clamped to the statutory base."
-          />
-          <BreakdownRow
-            label="PhilHealth employee share"
-            value={formatPeso(breakdown.philHealth)}
-            detail="2.5% employee share after statutory base limits."
-          />
-          <BreakdownRow
-            label="Pag-IBIG employee share"
-            value={formatPeso(breakdown.pagIbig)}
-            detail="2% employee share on a salary base capped at ₱10,000.00."
-          />
-          <BreakdownRow label="Total Statutory Deductions" value={formatPeso(breakdown.totalStatutoryDeductions)} />
-          <BreakdownRow label="Monthly Taxable Income" value={formatPeso(breakdown.monthlyTaxableIncome)} />
-          <BreakdownRow label="Annual Taxable Income" value={formatPeso(breakdown.annualTaxableIncome)} />
-          <BreakdownRow label="Annual Income Tax" value={formatPeso(breakdown.annualTax)} />
-          <BreakdownRow label="Monthly Withholding Tax" value={formatPeso(breakdown.monthlyWithholdingTax)} />
-          <BreakdownRow
-            label="Total Deductions"
-            value={`${formatPeso(breakdown.totalDeductions)} (${formatRate(breakdown.deductionRate)} of gross)`}
-          />
-          <BreakdownRow label="Final Net Take-Home Pay" value={formatPeso(breakdown.netMonthlyPay)} isEmphasis />
+        <div className="salary-summary-grid">
+          {summaryRows.map((row) => (
+            <BreakdownRow
+              key={row.label}
+              label={row.label}
+              value={row.value}
+              detail={row.detail}
+              isEmphasis={row.isEmphasis}
+            />
+          ))}
         </div>
-        <p className="mt-4 text-sm leading-relaxed text-white/48">
-          This educational model reflects the supplied 2026 TRAIN/statutory contribution formulas and excludes variable
-          company allowances, de minimis benefits, 13th-month tax exemptions, and other conditional modifiers.
+        <p className="salary-note">
+          This reflects the standard 2026 TRAIN tax schedule and mandatory contribution ceilings, but excludes
+          conditional modifiers such as variable company allowances, de minimis benefits, and 13th-month tax exemptions.
         </p>
       </section>
+
+      {tutorialOpen && (
+        <div
+          className="salary-tutorial-overlay"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <article
+            ref={tutorialCardRef}
+            role="dialog"
+            aria-labelledby="salary-tutorial-title"
+            aria-describedby="salary-tutorial-copy"
+            tabIndex={-1}
+            className="salary-tutorial-card"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                event.nativeEvent.stopImmediatePropagation?.();
+              }
+            }}
+          >
+            <div className="salary-tutorial-top">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/45">
+                Step {tutorialStep + 1} of {SALARY_TUTORIAL_STEPS.length}
+              </p>
+              <div className="salary-tutorial-dots" aria-hidden="true">
+                {SALARY_TUTORIAL_STEPS.map((step, index) => (
+                  <span
+                    key={step.title}
+                    className={`salary-tutorial-dot ${
+                      index === tutorialStep ? 'salary-tutorial-dot--active' : ''
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="salary-tutorial-main">
+              <div className="salary-tutorial-marker" aria-hidden="true">
+                {currentTutorialStep.marker}
+              </div>
+              <div className="min-w-0">
+                <h5 id="salary-tutorial-title" className="text-lg font-semibold tracking-normal text-white">
+                  {currentTutorialStep.title}
+                </h5>
+                <p id="salary-tutorial-copy" className="mt-2 text-sm leading-relaxed text-white/68">
+                  {currentTutorialStep.copy}
+                </p>
+              </div>
+            </div>
+
+            <div className="salary-tutorial-actions">
+              <button
+                type="button"
+                onClick={goToPreviousTutorialStep}
+                disabled={tutorialStep === 0}
+                className="album-game-button min-h-11 px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Back
+              </button>
+              <button type="button" onClick={finishTutorial} className="album-game-button min-h-11 px-4 py-2.5">
+                Skip Tutorial
+              </button>
+              <button type="button" onClick={goToNextTutorialStep} className="album-game-button salary-tutorial-primary min-h-11 px-4 py-2.5">
+                {tutorialStep === SALARY_TUTORIAL_STEPS.length - 1 ? 'Start Simulator' : 'Next'}
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
     </div>
   );
 }

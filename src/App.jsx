@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState, useRef, lazy } from 'react';
+import { Suspense, useCallback, useEffect, useState, useRef, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Lenis from 'lenis';
 
@@ -10,8 +10,16 @@ import ScrollProgress from './components/ScrollProgress';
 
 function App() {
   const [isResetting, setIsResetting] = useState(false);
-  const [introActive, setIntroActive] = useState(true);
+  // Intro starts hidden: it only mounts once the Earth is visually ready, so the
+  // World View reveal always plays over a finished globe (never a black/empty stage).
+  const [introActive, setIntroActive] = useState(false);
+  const [earthReady, setEarthReady] = useState(false);
+  const [earthError, setEarthError] = useState(false);
   const lenisRef = useRef(null);
+
+  // The boot loading screen owns the first-render gate until Cesium confirms the
+  // tiles are visually ready, or a setup/tile error makes waiting pointless.
+  const booting = !earthReady && !earthError;
 
   useEffect(() => {
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -50,6 +58,20 @@ function App() {
     if (lenisRef.current) lenisRef.current.start();
   };
 
+  const handleEarthReady = useCallback(() => setEarthReady(true), []);
+
+  const handleEarthError = useCallback(() => {
+    setEarthError(true);
+    // Don't leave the page scroll-locked behind a terminal setup-error screen.
+    if (lenisRef.current) lenisRef.current.start();
+  }, []);
+
+  // Fired after the boot loader finishes fading out. Play the World View intro only
+  // when the Earth actually rendered — on the error path the intro never mounts.
+  const handleBootGateExit = useCallback(() => {
+    if (earthReady) setIntroActive(true);
+  }, [earthReady]);
+
   const handleHomeClick = (e) => {
     e.preventDefault();
     setIsResetting(true);
@@ -85,6 +107,12 @@ function App() {
         )}
       </AnimatePresence>
 
+      {/* Boot loading gate — owns the first render until the Earth is visually
+          ready, then fades out and hands off to the World View intro. */}
+      <AnimatePresence onExitComplete={handleBootGateExit}>
+        {booting && <LoadingScreen key="boot" />}
+      </AnimatePresence>
+
       <AnimatePresence>
         {isResetting && (
           <motion.div
@@ -106,19 +134,18 @@ function App() {
         )}
       </AnimatePresence>
 
-      <nav className="fixed left-1/2 top-4 z-50 w-[min(92vw,46rem)] -translate-x-1/2 pointer-events-auto sm:top-5" aria-label="Primary navigation">
-        <div className="glass grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-full px-3 py-2 sm:px-4">
+      <nav className="pointer-events-auto fixed left-1/2 top-4 z-50 -translate-x-1/2 sm:top-5" aria-label="Primary navigation">
+        <div className="flex items-center justify-center gap-5 sm:gap-8">
           <a
             href="/"
             onClick={handleHomeClick}
-            className="rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-primary focus-visible:outline-primary"
+            className="px-1 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
             World View
           </a>
-          <div className="hidden h-px bg-white/[0.12] sm:block" aria-hidden="true" />
           <a
             href="#culture"
-            className="justify-self-end rounded-full px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted transition-colors hover:text-white focus-visible:outline-primary sm:justify-self-auto"
+            className="px-1 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
             Topics
           </a>
@@ -130,7 +157,7 @@ function App() {
 
       {/* Immersive 3D Earth Layer (Fixed Background) */}
       <Suspense fallback={<LoadingScreen />}>
-        <CesiumEarth />
+        <CesiumEarth onVisualReady={handleEarthReady} onSetupError={handleEarthError} />
       </Suspense>
 
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}
