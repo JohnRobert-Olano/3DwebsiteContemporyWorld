@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { projects } from '../lib/data/projects';
 import AlbumGameShell from './games/AlbumGameShell';
 import { gameRegistry } from './games/gameRegistry';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const PROJECT_COUNT = projects.length;
 
@@ -20,26 +17,30 @@ const STEP_Z_PX = -118;
 const ROT_X_DEG = 3;
 const ROT_Y_DEG = -16;
 const ROT_Z_DEG = 0;
-const SCRUB_DISTANCE = '+=520%';
 const STACK_ORIGIN_X = '54%';
 const STACK_ORIGIN_Y = '59%';
 const CARD_WIDTH = 'clamp(360px, 30vw, 540px)';
 const CARD_ASPECT = '1 / 1';
 const VISIBLE_RADIUS = 9;
-// Hover: pull the active cover out of the stack to the right, lift it toward
-// the viewer, and scale it slightly so the artwork can be inspected.
-// toward the viewer, and scale it slightly - together this reads as the
-const HOVER_SHIFT_X_PX = 150;
-const HOVER_SHIFT_Y_PX = -42;
-const HOVER_LIFT_Z_PX = 360;
-const HOVER_SCALE = 1.08;
+// Hover: nudge the active cover sideways inside the stack. Keep it in-plane
+// so the interaction feels like the original slide, not a full cover reveal.
+const HOVER_SHIFT_X_PX = 240;
+const HOVER_SHIFT_Y_PX = 0;
+const HOVER_LIFT_Z_PX = 0;
+const HOVER_SCALE = 1;
 
-// Extra copies before and after the live set keep the pinned scrub from showing gaps.
-const LOOP_COPIES = 2;
-const TOTAL_VIRTUAL = PROJECT_COUNT * (1 + LOOP_COPIES * 2);
-const START_SEQUENCE = PROJECT_COUNT * LOOP_COPIES;
+// Windowed ring buffer: render slots from -RENDER_RADIUS..+RENDER_RADIUS around
+// the active index. Slots are keyed by offset (never remount); the outer rings
+// beyond VISIBLE_RADIUS fade, so covers recycled at the far edge stay invisible.
+// There is no finite strip and no boundary to teleport across - the loop is
+// genuinely endless and flicker-free.
+const RENDER_RADIUS = VISIBLE_RADIUS + 2;
+const MAX_TARGET_AHEAD = Math.max(2, RENDER_RADIUS - 3);
 
-const BG_GALLERY = 'var(--bg)';
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 const TEXT_DARK = '#ffffff';
 const TEXT_META = 'rgba(255, 255, 255, 0.7)';
 const TEXT_MUTED = 'rgba(255, 255, 255, 0.45)';
@@ -78,34 +79,18 @@ function cleanText(value) {
   ).replace(/\s{2,}/g, ' ');
 }
 
-function setProjectsFinaleReady(isReady) {
-  if (typeof window === 'undefined') return;
-  window.projectsFinaleReady = isReady;
-  if (isReady) {
-    window.dispatchEvent(new Event('projectsFinaleReady'));
-  }
+// Move the whole stack by the fractional part of the sequence only (|d| stays
+// around 0.5), so the container transform never accumulates or jumps at a loop
+// boundary. Net on-screen position of a slot = (offset - d) * STEP.
+function applyStackTransform(el, d) {
+  el.style.transform = `translate3d(${(-d * STEP_X_VW).toFixed(4)}vw, ${(-d * STEP_Y_VW).toFixed(4)}vw, ${(-d * STEP_Z_PX).toFixed(2)}px)`;
 }
-
-function buildVirtualCards() {
-  if (!PROJECT_COUNT) return [];
-
-  return Array.from({ length: TOTAL_VIRTUAL }, (_, sequenceIndex) => {
-    const realIndex = wrapIndex(sequenceIndex);
-    return {
-      sequenceIndex,
-      realIndex,
-      project: projects[realIndex],
-    };
-  });
-}
-
-const VIRTUAL_CARDS = buildVirtualCards();
 
 function ProjectCover({ project }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const [failedImage, setFailedImage] = useState(null);
   const title = cleanText(project.title);
   const role = cleanText(project.role);
-  const useFallback = !project.image || imageFailed;
+  const useFallback = !project.image || failedImage === project.image;
 
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -115,7 +100,7 @@ function ProjectCover({ project }) {
         <img
           src={project.image}
           alt=""
-          onError={() => setImageFailed(true)}
+          onError={() => setFailedImage(project.image)}
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
           style={{
@@ -167,15 +152,15 @@ function ProjectCover({ project }) {
   );
 }
 
-function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
-  const { project, sequenceIndex } = card;
+function StackCard({ project, offset, onOpen, reducedMotion }) {
   const [isHovered, setIsHovered] = useState(false);
-  const distance = Math.abs(sequenceIndex - activeSequenceIndex);
-  const isActive = sequenceIndex === activeSequenceIndex;
-  const visible = distance <= VISIBLE_RADIUS;
-  const canInteract = visible;
+  const distance = Math.abs(offset);
+  const isActive = offset === 0;
+  // Slots are keyed by offset, so opacity is constant per slot - the outer two
+  // rings fade, which hides the cover-content recycling at the far edge.
+  const opacity = Math.max(0, Math.min(1, (RENDER_RADIUS - distance) / 2));
+  const canInteract = distance <= VISIBLE_RADIUS;
   const hoverActive = canInteract && isHovered && !reducedMotion;
-  const opacity = visible ? 1 : 0;
   const hoverTransform = hoverActive
     ? ` translate3d(${HOVER_SHIFT_X_PX}px, ${HOVER_SHIFT_Y_PX}px, ${HOVER_LIFT_Z_PX}px) scale(${HOVER_SCALE})`
     : '';
@@ -189,20 +174,21 @@ function StackCard({ card, activeSequenceIndex, onOpen, reducedMotion }) {
       onFocus={() => setIsHovered(true)}
       onBlur={() => setIsHovered(false)}
       aria-label={`Open ${cleanText(project.title)}`}
+      aria-hidden={canInteract ? undefined : 'true'}
+      tabIndex={canInteract ? undefined : -1}
       className="absolute cursor-pointer overflow-visible rounded-[2px] p-0 text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-4"
       style={{
         left: STACK_ORIGIN_X,
         top: STACK_ORIGIN_Y,
         width: CARD_WIDTH,
         aspectRatio: CARD_ASPECT,
-        transform: `translate(-50%, -50%) translate3d(${sequenceIndex * STEP_X_VW}vw, ${sequenceIndex * STEP_Y_VW}vw, ${sequenceIndex * STEP_Z_PX}px) rotateX(${ROT_X_DEG}deg) rotateY(${ROT_Y_DEG}deg) rotateZ(${ROT_Z_DEG}deg)`,
+        transform: `translate(-50%, -50%) translate3d(${offset * STEP_X_VW}vw, ${offset * STEP_Y_VW}vw, ${offset * STEP_Z_PX}px) rotateX(${ROT_X_DEG}deg) rotateY(${ROT_Y_DEG}deg) rotateZ(${ROT_Z_DEG}deg)`,
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
-        zIndex: hoverActive ? 3000 : 1000 - sequenceIndex,
+        zIndex: hoverActive ? 3000 : 1000 - offset,
         opacity,
         pointerEvents: canInteract ? 'auto' : 'none',
-        transition: reducedMotion ? 'none' : 'opacity 0.24s ease',
-        willChange: 'transform, opacity',
+        willChange: 'transform',
         outlineColor: FOCUS_RING,
       }}
     >
@@ -246,9 +232,9 @@ function GridCard({ project, onOpen }) {
         backdropFilter: 'blur(10px)',
         boxShadow: isHovered ? SHADOW_ACTIVE : SHADOW_DEFAULT,
         outlineColor: FOCUS_RING,
-        // Mirror the stack hover: slide RIGHT out of the grid row + lift up +
-        // scale, so the hovered cover pops forward to show the artwork.
-        transform: isHovered ? 'translate3d(14px, -10px, 0) scale(1.04)' : 'translate3d(0, 0, 0) scale(1)',
+        // Mirror the stack hover: slide sideways without turning the grid card
+        // into a full cover reveal.
+        transform: isHovered ? 'translate3d(22px, 0, 0) scale(1.01)' : 'translate3d(0, 0, 0) scale(1)',
         transition: 'transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s ease',
         zIndex: isHovered ? 20 : 1,
         willChange: 'transform',
@@ -268,11 +254,14 @@ function FullscreenView({ project, onClose, reducedMotion }) {
   const blurb = cleanText(project.blurb);
   const gameMeta = gameRegistry[project.id];
   const GameComponent = gameMeta?.Component;
+  const isGameModal = Boolean(GameComponent);
 
   return (
     <motion.div
       key={project.id}
-      className="fixed inset-0 z-[80] flex items-center justify-center px-5 py-8 backdrop-blur-md sm:px-6 sm:py-10"
+      className={`fixed inset-0 z-[80] flex items-center justify-center backdrop-blur-md ${
+        isGameModal ? 'px-1.5 py-1.5 sm:px-2 sm:py-2 lg:px-4 lg:py-4' : 'px-5 py-8 sm:px-6 sm:py-10'
+      }`}
       style={{ background: 'rgba(26,25,23,0.72)' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -284,9 +273,13 @@ function FullscreenView({ project, onClose, reducedMotion }) {
       aria-label={title}
     >
       <motion.div
-        className="relative z-[81] flex max-h-full w-full flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)]"
+        className={`relative z-[81] flex w-full flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)] ${
+          isGameModal ? 'projects-game-modal' : 'max-h-full'
+        }`}
         style={{
-          maxWidth: gameMeta ? 'min(1480px, calc(100vw - 2rem))' : '64rem',
+          height: isGameModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
+          maxHeight: isGameModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
+          maxWidth: gameMeta ? 'min(1480px, calc(100vw - clamp(0.5rem, 2vw, 2rem)))' : '64rem',
           transformOrigin: 'center center',
           background: gameMeta ? 'rgba(13, 13, 13, 0.98)' : 'rgba(18, 18, 18, 0.82)',
           backdropFilter: 'blur(24px)',
@@ -389,21 +382,39 @@ function FullscreenView({ project, onClose, reducedMotion }) {
   );
 }
 
-export default function ProjectsFinale() {
-  const sectionRef = useRef(null);
-  const stackRef = useRef(null);
-  const lastActiveSequenceRef = useRef(START_SEQUENCE);
+const WHEEL_SENSITIVITY = 0.012; // sequence units per wheel deltaY pixel
+const TOUCH_SENSITIVITY = 0.02; // sequence units per touch-drag pixel
+const STACK_LERP = 0.14; // smoothing toward the target sequence
 
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [activeSequenceIndex, setActiveSequenceIndex] = useState(START_SEQUENCE);
+export default function ProjectsFinale() {
+  const archiveRootRef = useRef(null);
+  const stackRef = useRef(null);
+  const seqRef = useRef(0); // continuous scroll position, in cards (unbounded)
+  const targetSeqRef = useRef(0);
+  const baseRef = useRef(0); // integer base React has committed (== `base` state)
+  const requestedBaseRef = useRef(0); // last base we asked React to render
+  const fullscreenRef = useRef(null);
+
+  // `base` is the active integer index; content for slot `offset` is
+  // projects[wrapIndex(base + offset)]. Driving content off committed state (not
+  // a ref) keeps the rendered covers and the container transform on the same
+  // basis, which is what removes the loop-boundary flicker.
+  const [base, setBase] = useState(0);
   const [fullscreen, setFullscreen] = useState(null);
   const [mode, setMode] = useState('OVERVIEW');
   const [reducedMotion, setReducedMotion] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isUnlocked, setIsUnlocked] = useState(
+  const [archiveActive, setArchiveActive] = useState(
     () => typeof window !== 'undefined' && window.projectsFinaleUnlocked === true,
   );
 
+  const useStack = archiveActive && mode === 'OVERVIEW' && !reducedMotion && !isMobile;
+
+  useEffect(() => {
+    fullscreenRef.current = fullscreen;
+  }, [fullscreen]);
+
+  // ── Responsive / reduced-motion sync ──────────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
 
@@ -424,293 +435,307 @@ export default function ProjectsFinale() {
     };
   }, []);
 
+  // ── Enter archive mode on the unlock event dispatched by "Open articles" ──
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
-
-    const unlock = () => setIsUnlocked(true);
-    if (window.projectsFinaleUnlocked) unlock();
-
-    window.addEventListener('projectsFinaleUnlock', unlock);
-    return () => window.removeEventListener('projectsFinaleUnlock', unlock);
+    const enter = () => setArchiveActive(true);
+    if (window.projectsFinaleUnlocked) enter();
+    window.addEventListener('projectsFinaleUnlock', enter);
+    return () => window.removeEventListener('projectsFinaleUnlock', enter);
   }, []);
-
-  useEffect(() => {
-    window.projectsFinaleActive = false;
-    window.projectsScrollProgress = 0;
-    setProjectsFinaleReady(false);
-
-    const useStack = isUnlocked && mode === 'OVERVIEW' && !reducedMotion && !isMobile;
-    if (!useStack || !PROJECT_COUNT) {
-      const stackEl = stackRef.current;
-      if (stackEl) stackEl.style.transform = 'translate3d(0, 0, 0)';
-      document.body.classList.remove('in-projects-finale');
-      return undefined;
-    }
-
-    const section = sectionRef.current;
-    const stackEl = stackRef.current;
-    if (!section || !stackEl) return undefined;
-
-    const setCamera = (progress) => {
-      const currentSequence = START_SEQUENCE + progress * PROJECT_COUNT;
-      const camX = -(currentSequence * STEP_X_VW);
-      const camY = -(currentSequence * STEP_Y_VW);
-      const camZ = currentSequence * Math.abs(STEP_Z_PX);
-      stackEl.style.transform = `translate3d(${camX}vw, ${camY}vw, ${camZ}px)`;
-
-      const nearestSequence = Math.round(currentSequence);
-      if (nearestSequence !== lastActiveSequenceRef.current) {
-        lastActiveSequenceRef.current = nearestSequence;
-        setActiveSequenceIndex(nearestSequence);
-        setActiveIndex(wrapIndex(nearestSequence));
-      }
-    };
-
-    setCamera(0);
-    setActiveSequenceIndex(START_SEQUENCE);
-    setActiveIndex(0);
-    lastActiveSequenceRef.current = START_SEQUENCE;
-
-    const enter = () => {
-      window.projectsFinaleActive = true;
-      document.body.classList.add('in-projects-finale');
-    };
-    const leave = () => {
-      window.projectsFinaleActive = false;
-      document.body.classList.remove('in-projects-finale');
-    };
-
-    const ctx = gsap.context(() => {
-      ScrollTrigger.create({
-        trigger: section,
-        start: 'top top',
-        end: SCRUB_DISTANCE,
-        pin: true,
-        scrub: 1,
-        anticipatePin: 1,
-        onEnter: enter,
-        onEnterBack: enter,
-        onLeave: leave,
-        onLeaveBack: leave,
-        onUpdate: (self) => {
-          window.projectsScrollProgress = self.progress;
-          setCamera(self.progress);
-        },
-      });
-    }, sectionRef);
-
-    ScrollTrigger.refresh();
-    const readyFrame = window.requestAnimationFrame(() => {
-      ScrollTrigger.refresh();
-      setProjectsFinaleReady(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(readyFrame);
-      ctx.revert();
-      window.projectsFinaleActive = false;
-      window.projectsScrollProgress = 0;
-      setProjectsFinaleReady(false);
-      document.body.classList.remove('in-projects-finale');
-    };
-  }, [mode, reducedMotion, isMobile, isUnlocked]);
 
   const closeFullscreen = useCallback(() => setFullscreen(null), []);
 
-  useEffect(() => {
-    if (!fullscreen) return undefined;
+  const exitArchive = useCallback(() => {
+    if (typeof window !== 'undefined') window.projectsFinaleUnlocked = false;
+    setFullscreen(null);
+    setMode('OVERVIEW');
+    setArchiveActive(false);
+  }, []);
 
-    document.body.classList.add('projects-finale-modal-open');
+  // ── Archive activation: lock the world, stop Lenis, move focus inside ─────
+  useEffect(() => {
+    if (!archiveActive) return undefined;
+    document.body.classList.add('album-archive-active');
+    window.projectsFinaleActive = true;
     window.codexLenis?.stop?.();
 
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeFullscreen();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.classList.remove('projects-finale-modal-open');
-      window.codexLenis?.start?.();
-    };
-  }, [fullscreen, closeFullscreen]);
-
-  const useStack = isUnlocked && mode === 'OVERVIEW' && !reducedMotion && !isMobile;
-
-  useEffect(() => {
-    if (!isUnlocked || useStack) return undefined;
-
-    const section = sectionRef.current;
-    const readyFrame = window.requestAnimationFrame(() => {
-      ScrollTrigger.refresh();
-      setProjectsFinaleReady(true);
+    const focusFrame = window.requestAnimationFrame(() => {
+      archiveRootRef.current?.focus?.();
     });
 
-    if (!section || typeof IntersectionObserver === 'undefined') {
-      document.body.classList.add('in-projects-finale');
-      return () => {
-        window.cancelAnimationFrame(readyFrame);
-        setProjectsFinaleReady(false);
-        document.body.classList.remove('in-projects-finale');
-      };
-    }
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.classList.remove('album-archive-active');
+      document.body.classList.remove('projects-finale-modal-open');
+      window.projectsFinaleActive = false;
+      window.codexLenis?.start?.();
+    };
+  }, [archiveActive]);
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        document.body.classList.toggle('in-projects-finale', entry.isIntersecting);
-      },
-      { threshold: 0.15 },
-    );
-    observer.observe(section);
+  // ── Escape: close the game modal first, otherwise exit the archive ────────
+  useEffect(() => {
+    if (!archiveActive) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (fullscreenRef.current) setFullscreen(null);
+      else exitArchive();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [archiveActive, exitArchive]);
+
+  // ── Game modal body class (defensive chrome hide) ─────────────────────────
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    document.body.classList.add('projects-finale-modal-open');
+    return () => document.body.classList.remove('projects-finale-modal-open');
+  }, [fullscreen]);
+
+  // Keep the container transform on the SAME basis as the rendered content:
+  // whenever `base` commits, re-apply the fractional transform before paint so
+  // the content-shift and transform-shift land in one frame (no flicker).
+  useLayoutEffect(() => {
+    baseRef.current = base;
+    requestedBaseRef.current = base;
+    const el = stackRef.current;
+    if (el) applyStackTransform(el, seqRef.current - base);
+  }, [base]);
+
+  // ── Internal looping driver ───────────────────────────────────────────────
+  // Wheel / touch / arrow input advances an unbounded virtual sequence (NOT
+  // document scroll), so the archive can never slide into the world. Only a
+  // window of cards is rendered around the active index, recycled via
+  // wrapIndex, so the loop is endless with no boundary to teleport across.
+  useEffect(() => {
+    if (!archiveActive || !useStack) return undefined;
+    const root = archiveRootRef.current;
+    const stackEl = stackRef.current;
+    if (!root || !stackEl) return undefined;
+
+    seqRef.current = 0;
+    targetSeqRef.current = 0;
+    baseRef.current = 0;
+    requestedBaseRef.current = 0;
+    setBase(0);
+    applyStackTransform(stackEl, 0);
+
+    const nudge = (delta) => {
+      targetSeqRef.current = clampNumber(
+        targetSeqRef.current + delta,
+        seqRef.current - MAX_TARGET_AHEAD,
+        seqRef.current + MAX_TARGET_AHEAD,
+      );
+    };
+
+    let raf = window.requestAnimationFrame(function tick() {
+      const target = targetSeqRef.current;
+      const next = seqRef.current + (target - seqRef.current) * STACK_LERP;
+      seqRef.current = Math.abs(target - next) < 0.0004 ? target : next;
+
+      // Transform uses the committed base so it always matches the rendered
+      // covers; the layout effect re-syncs on the frame `base` actually changes.
+      applyStackTransform(stackEl, seqRef.current - baseRef.current);
+
+      const desiredBase = Math.round(seqRef.current);
+      if (desiredBase !== requestedBaseRef.current) {
+        requestedBaseRef.current = desiredBase;
+        setBase(desiredBase);
+      }
+      raf = window.requestAnimationFrame(tick);
+    });
+
+    const onWheel = (e) => {
+      if (fullscreenRef.current) return; // let the open game scroll internally
+      e.preventDefault();
+      nudge(e.deltaY * WHEEL_SENSITIVITY);
+    };
+
+    let touchY = null;
+    const onTouchStart = (e) => { touchY = e.touches[0]?.clientY ?? null; };
+    const onTouchMove = (e) => {
+      if (fullscreenRef.current || touchY == null) return;
+      e.preventDefault();
+      const current = e.touches[0]?.clientY ?? touchY;
+      nudge((touchY - current) * TOUCH_SENSITIVITY);
+      touchY = current;
+    };
+    const onTouchEnd = () => { touchY = null; };
+
+    const onKey = (e) => {
+      if (fullscreenRef.current) return;
+      const k = e.key;
+      if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown') {
+        e.preventDefault();
+        nudge(1);
+      } else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') {
+        e.preventDefault();
+        nudge(-1);
+      }
+    };
+
+    root.addEventListener('wheel', onWheel, { passive: false });
+    root.addEventListener('touchstart', onTouchStart, { passive: true });
+    root.addEventListener('touchmove', onTouchMove, { passive: false });
+    root.addEventListener('touchend', onTouchEnd, { passive: true });
+    root.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    root.addEventListener('keydown', onKey);
 
     return () => {
-      window.cancelAnimationFrame(readyFrame);
-      observer.disconnect();
-      setProjectsFinaleReady(false);
-      document.body.classList.remove('in-projects-finale');
+      window.cancelAnimationFrame(raf);
+      root.removeEventListener('wheel', onWheel);
+      root.removeEventListener('touchstart', onTouchStart);
+      root.removeEventListener('touchmove', onTouchMove);
+      root.removeEventListener('touchend', onTouchEnd);
+      root.removeEventListener('touchcancel', onTouchEnd);
+      root.removeEventListener('keydown', onKey);
     };
-  }, [isUnlocked, useStack]);
+  }, [archiveActive, useStack]);
 
+  const activeIndex = wrapIndex(base);
   const activeProject = projects[activeIndex] ?? projects[0];
 
-  if (!PROJECT_COUNT) return null;
+  if (!PROJECT_COUNT || !archiveActive) return null;
 
-  return (
-    <section
-      ref={sectionRef}
-      id="projects-finale"
-      className={`panel-section relative w-full overflow-hidden transition-opacity duration-300 ${
-        isUnlocked ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
-      }`}
-      style={{ minHeight: '100dvh', background: BG_GALLERY }}
-      aria-label="Article archive"
-      aria-hidden={!isUnlocked}
+  return createPortal(
+    <div
+      ref={archiveRootRef}
+      className="album-archive"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Album archive"
+      tabIndex={-1}
+      data-lenis-prevent
     >
-      {isUnlocked && (
-        <>
-          <div className="pointer-events-none absolute left-[6vw] top-[8vh] z-30 max-w-[82vw] sm:max-w-[56vw] lg:max-w-[38vw]">
-            <p
-              className="font-mono text-[10px] uppercase tracking-[0.24em]"
-              style={{ color: TEXT_MUTED }}
-            >
-              <span
-                className="mr-2 inline-block h-px w-6 align-middle"
-                style={{ background: TEXT_MUTED }}
-                aria-hidden="true"
-              />
-              Article archive
-            </p>
-            <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em]" style={{ color: TEXT_MUTED }}>
-              {PROJECT_COUNT} visual essays
-            </div>
-            <h2
-              className="mt-3 text-3xl font-semibold leading-tight tracking-normal sm:text-4xl lg:text-5xl"
-              style={{ color: TEXT_DARK, letterSpacing: 0, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}
-            >
-              {cleanText(activeProject.title)}
-            </h2>
-            <p
-              className="mt-2 font-mono text-[10px] uppercase tracking-[0.28em]"
-              style={{ color: TEXT_META }}
-            >
-              {cleanText(activeProject.role)} / {activeProject.year}
-            </p>
-          </div>
+      <div className="pointer-events-none absolute left-[6vw] top-[6vh] z-30 max-w-[82vw] sm:max-w-[56vw] lg:max-w-[40vw]">
+        <p className="font-mono text-[10px] uppercase tracking-[0.24em]" style={{ color: TEXT_MUTED }}>
+          <span
+            className="mr-2 inline-block h-px w-6 align-middle"
+            style={{ background: TEXT_MUTED }}
+            aria-hidden="true"
+          />
+          Article archive
+        </p>
+        <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em]" style={{ color: TEXT_MUTED }}>
+          {PROJECT_COUNT} visual essays
+        </div>
+        <h2
+          className="mt-3 text-3xl font-semibold leading-tight tracking-normal sm:text-4xl lg:text-5xl"
+          style={{ color: TEXT_DARK, letterSpacing: 0, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}
+        >
+          {cleanText(activeProject.title)}
+        </h2>
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.28em]" style={{ color: TEXT_META }}>
+          {cleanText(activeProject.role)} / {activeProject.year}
+        </p>
+      </div>
 
-          {useStack && (
-            <div
-              className="absolute inset-0 z-10"
-              style={{ perspective: '1800px', perspectiveOrigin: '54% 52%' }}
-            >
-              <div
-                ref={stackRef}
-                className="absolute inset-0"
+      <button
+        type="button"
+        onClick={exitArchive}
+        aria-label="Return to the world"
+        className="pointer-events-auto absolute right-[6vw] top-[6vh] z-40 cursor-pointer rounded-full px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] outline-none transition-colors hover:bg-white hover:text-bg focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{
+          border: `1px solid ${BORDER_CARD}`,
+          background: 'rgba(255, 255, 255, 0.05)',
+          color: 'rgba(255, 255, 255, 0.82)',
+          backdropFilter: 'blur(4px)',
+          outlineColor: FOCUS_RING,
+        }}
+      >
+        Back to World
+      </button>
+
+      {useStack && (
+        <div
+          className="absolute inset-0 z-10"
+          style={{ perspective: '1800px', perspectiveOrigin: '54% 52%' }}
+        >
+          <div
+            ref={stackRef}
+            className="absolute inset-0"
+            style={{ transformStyle: 'preserve-3d', transform: 'translate3d(0, 0, 0)' }}
+          >
+            {Array.from({ length: RENDER_RADIUS * 2 + 1 }, (_, i) => {
+              const offset = i - RENDER_RADIUS;
+              return (
+                <StackCard
+                  key={offset}
+                  offset={offset}
+                  project={projects[wrapIndex(base + offset)]}
+                  onOpen={setFullscreen}
+                  reducedMotion={reducedMotion}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!useStack && (
+        <div
+          className="absolute inset-0 overflow-y-auto px-[6vw] pb-[16vh] pt-[30vh] sm:pt-[26vh]"
+          data-lenis-prevent
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {projects.map((project) => (
+              <GridCard key={project.id} project={project} onOpen={setFullscreen} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isMobile && (
+        <div
+          className="pointer-events-auto absolute bottom-8 right-8 z-30 flex items-center gap-1 rounded-full p-1 backdrop-blur-sm"
+          style={{
+            background: 'rgba(15, 15, 15, 0.65)',
+            backdropFilter: 'blur(12px)',
+            border: `1px solid ${BORDER_CARD}`,
+          }}
+        >
+          {['OVERVIEW', 'INDEX'].map((viewMode) => {
+            const active = mode === viewMode;
+            const disabled = viewMode === 'OVERVIEW' && reducedMotion;
+            return (
+              <button
+                key={viewMode}
+                type="button"
+                onClick={() => !disabled && setMode(viewMode)}
+                disabled={disabled}
+                aria-pressed={active}
+                aria-label={`Switch to ${viewMode.toLowerCase()} view`}
+                className={`rounded-full px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.28em] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                  active
+                    ? 'text-bg'
+                    : disabled
+                      ? 'cursor-not-allowed'
+                      : 'cursor-pointer hover:text-white'
+                }`}
                 style={{
-                  transformStyle: 'preserve-3d',
-                  transform: 'translate3d(0, 0, 0)',
+                  background: active ? 'rgba(255,255,255,0.94)' : 'transparent',
+                  color: active ? 'var(--bg)' : disabled ? TEXT_MUTED : TEXT_META,
+                  outlineColor: FOCUS_RING,
                 }}
               >
-                {VIRTUAL_CARDS.map((card) => (
-                  <StackCard
-                    key={`project-card-${card.sequenceIndex}`}
-                    card={card}
-                    activeSequenceIndex={activeSequenceIndex}
-                    onOpen={setFullscreen}
-                    reducedMotion={reducedMotion}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!useStack && (
-            <div className="absolute inset-0 overflow-y-auto px-[6vw] pb-[16vh] pt-[34vh]">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {projects.map((project) => (
-                  <GridCard
-                    key={project.id}
-                    project={project}
-                    onOpen={setFullscreen}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!isMobile && (
-            <div
-              className="pointer-events-auto absolute bottom-8 right-8 z-30 flex items-center gap-1 rounded-full p-1 backdrop-blur-sm"
-              style={{
-                background: 'rgba(15, 15, 15, 0.65)',
-                backdropFilter: 'blur(12px)',
-                border: `1px solid ${BORDER_CARD}`,
-              }}
-            >
-              {['OVERVIEW', 'INDEX'].map((viewMode) => {
-                const active = mode === viewMode;
-                const disabled = viewMode === 'OVERVIEW' && reducedMotion;
-                return (
-                  <button
-                    key={viewMode}
-                    type="button"
-                    onClick={() => !disabled && setMode(viewMode)}
-                    disabled={disabled}
-                    aria-pressed={active}
-                    aria-label={`Switch to ${viewMode.toLowerCase()} view`}
-                    className={`rounded-full px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.28em] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                      active
-                        ? 'text-bg'
-                        : disabled
-                          ? 'cursor-not-allowed'
-                          : 'cursor-pointer hover:text-white'
-                    }`}
-                    style={{
-                      background: active ? 'rgba(255,255,255,0.94)' : 'transparent',
-                      color: active ? 'var(--bg)' : disabled ? TEXT_MUTED : TEXT_META,
-                      outlineColor: FOCUS_RING,
-                    }}
-                  >
-                    {viewMode}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <AnimatePresence>
-            {fullscreen && (
-              <FullscreenView
-                project={fullscreen}
-                onClose={closeFullscreen}
-                reducedMotion={reducedMotion}
-              />
-            )}
-          </AnimatePresence>
-        </>
+                {viewMode}
+              </button>
+            );
+          })}
+        </div>
       )}
-    </section>
+
+      <AnimatePresence>
+        {fullscreen && (
+          <FullscreenView
+            project={fullscreen}
+            onClose={closeFullscreen}
+            reducedMotion={reducedMotion}
+          />
+        )}
+      </AnimatePresence>
+    </div>,
+    document.body,
   );
 }

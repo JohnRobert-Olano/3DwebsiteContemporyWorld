@@ -5,6 +5,10 @@ export const destinations = [
     location: 'Rome, Italy',
     built: '70-80 AD',
     eraRange: '264 BC - 476 AD',
+    epochIndex: 1,
+    epochTitle: 'Roman Conquest',
+    epochDescription:
+      'Rome unified Europe, North Africa, and the Middle East under a single legal and economic system. By establishing a common currency, standardized laws, and a vast road network, Rome created an early model of administrative globalization that helped goods, laws, labor, and ideas move across vast distances.',
     lat: 41.89191,
     lon: 12.49143,
     camera: {
@@ -23,6 +27,10 @@ export const destinations = [
     location: 'Vatican City',
     built: '1506-1626',
     eraRange: '3rd Century BC - 15th Century AD',
+    epochIndex: 2,
+    epochTitle: 'Globalization of Religion',
+    epochDescription:
+      'Buddhism, Christianity, and Islam expanded beyond their original regions through trade routes, missionaries, pilgrimage, and empire. These faiths created shared moral frameworks and institutional networks that connected diverse societies long before modern economic globalization.',
     lat: 41.90484,
     lon: 12.45344,
     camera: {
@@ -41,6 +49,10 @@ export const destinations = [
     location: "Xi'an, China",
     built: '1374-1378, Ming Dynasty',
     eraRange: '1206 AD - 1242 AD',
+    epochIndex: 3,
+    epochTitle: 'The Mongol Empire & Pax Mongolica',
+    epochDescription:
+      'The Mongol Empire stabilized much of the Silk Road under one authority, allowing merchants, diplomats, technologies, and cultural practices to travel across Eurasia with unusual speed. This connected world also carried danger, including the spread of the Bubonic Plague.',
     // "Fortifications of Xi'an" - the Google Maps entry, Xincheng District,
     // postal 710003. Coordinates from OpenStreetMap's "永宁门" tourism
     // attraction node, which sits dead-center on the South Gate (Yongning
@@ -57,6 +69,10 @@ export const destinations = [
     location: 'San Salvador, Bahamas',
     built: 'Natural island',
     eraRange: 'August 3, 1492 - November 7, 1504',
+    epochIndex: 4,
+    epochTitle: 'The Voyages of Christopher Columbus',
+    epochDescription:
+      'Columbus initiated permanent contact between the Eastern and Western hemispheres. The resulting Columbian Exchange moved crops, animals, people, wealth, and diseases across oceans, reshaping global demographics, food systems, colonization, and power.',
     lat: 24.02798,
     lon: -74.47961,
     camera: {
@@ -75,6 +91,10 @@ export const destinations = [
     location: 'Cagusu-an, Guiuan, Eastern Samar, Philippines',
     built: 'Historic coastal settlement',
     eraRange: 'September 20, 1519 - September 6, 1522',
+    epochIndex: 5,
+    epochTitle: "Magellan's Circumnavigation",
+    epochDescription:
+      'The first circumnavigation proved that the Earth could be understood as one continuous navigable system. It opened a new imagination of global connection, linking Europe, Asia, the Pacific, and the Americas through maritime routes.',
     // Google Maps plus code PRC8+VWJ Guiuan = global OLC 7Q27PRC8+VWJ, which
     // decodes to a ~0.6m x 0.9m cell at (10.7222025°N, 125.8172539°E) - the
     // Cagusuan Church & Plaza pin on Homonhon Island.
@@ -96,6 +116,10 @@ export const destinations = [
     location: 'Madrid, Spain',
     built: '1738-1755',
     eraRange: '1492 - 1900',
+    epochIndex: 6,
+    epochTitle: 'European Colonial Conquests',
+    epochDescription:
+      'European colonial expansion integrated distant continents into empire-led trade networks through extraction, forced labor, plantation economies, and maritime control. This era helped build the modern world economy while producing deep structural inequalities.',
     lat: 40.43698,
     lon: -3.72667,
     camera: {
@@ -114,6 +138,10 @@ export const destinations = [
     location: 'Schwangau, Germany',
     built: '1869-1886',
     eraRange: '1618 - 1945',
+    epochIndex: 7,
+    epochTitle: 'Intra-European Wars',
+    epochDescription:
+      'European conflicts, from the Thirty Years\' War to the World Wars, redrew borders and transformed the rules of international order. War became a force that produced state sovereignty, alliances, institutions, and the modern multilateral system.',
     lat: 47.56202,
     lon: 10.70776,
     camera: {
@@ -132,6 +160,10 @@ export const destinations = [
     location: 'London, England',
     built: '1703, original townhouse',
     eraRange: '1870 - 1914',
+    epochIndex: 8,
+    epochTitle: 'Heyday of European Imperialism',
+    epochDescription:
+      'During the age of high imperialism, European powers controlled much of the globe and reorganized colonies around raw materials, labor, and strategic routes. This period hardened the divide between industrial centers and resource-exporting peripheries.',
     lat: 51.50102,
     lon: -0.14405,
     camera: {
@@ -150,6 +182,10 @@ export const destinations = [
     location: 'London, England',
     built: '1859',
     eraRange: 'November 2, 1936 - 1939',
+    epochIndex: 9,
+    epochTitle: 'The First Television Broadcasts',
+    epochDescription:
+      'Mass broadcasting created a new global village. For the first time, distant populations could witness the same events, images, leaders, wars, rituals, and consumer culture at nearly the same moment.',
     lat: 51.49708,
     lon: -0.12738,
     camera: {
@@ -168,6 +204,10 @@ export const destinations = [
     location: 'New York, USA',
     built: '1886',
     eraRange: 'September 2, 1945 - December 25, 1991',
+    epochIndex: 10,
+    epochTitle: 'Post-World War II Period',
+    epochDescription:
+      'After World War II, institutions such as the United Nations, the IMF, the World Bank, and the Bretton Woods system created a formal architecture for international governance, finance, reconstruction, trade, and development.',
     lat: 40.68939,
     lon: -74.04469,
     camera: {
@@ -186,6 +226,10 @@ export const destinations = [
     location: 'Washington, D.C., USA',
     built: '1792-1800',
     eraRange: 'December 26, 1991 - Present',
+    epochIndex: 11,
+    epochTitle: 'Post-Cold War Period',
+    epochDescription:
+      "After the Soviet Union collapsed, capitalism, liberalization, global finance, and the internet spread rapidly. China's entry into the WTO in 2001 marked a peak moment of economic integration and accelerated global supply chains.",
     lat: 38.89724,
     lon: -77.03687,
     camera: {
@@ -204,6 +248,10 @@ export const destinations = [
     location: 'New York, USA',
     built: 'Rebuilt 2014, One World Trade Center',
     eraRange: 'September 11, 2001',
+    epochIndex: 12,
+    epochTitle: 'The 9/11 Attacks',
+    epochDescription:
+      "The 9/11 attacks showed that globalization's open systems, including finance, travel, media, and digital networks, could be weaponized by non-state actors. The War on Terror introduced surveillance, militarized borders, and permanent security friction into global openness.",
     lat: 40.70992,
     lon: -74.00685,
     camera: {
@@ -218,17 +266,6 @@ export const destinations = [
   },
 ];
 
-export const romeIntro = {
-  id: 'rome',
-  name: 'Rome Intro',
-  location: 'Rome, Italy',
-  lat: 41.9028,
-  lon: 12.4964,
-};
-
-// Rome Intro removed from the nav - Colosseum (destinations[0]) is now the
-// first journey stop, so the nav indices line up 1:1 with the destinations
-// array.
 export const journeyNavItems = destinations.map((destination) => ({
   id: destination.id,
   name: destination.name,

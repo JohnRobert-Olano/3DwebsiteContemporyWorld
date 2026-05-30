@@ -180,7 +180,7 @@ function TradeLog({ entries }) {
       <h5 id="gex-trade-log-title" className="gex-panel__title">
         Receipts
       </h5>
-      <div className="mt-4 grid gap-2">
+      <div className="gex-log-list">
         {entries.length ? (
           entries.map((entry, index) => (
             <p key={entry.id} className={`gex-receipt ${index === 0 ? 'gex-receipt--latest' : ''}`}>
@@ -251,7 +251,7 @@ export default function GlobExGame() {
   };
 
   return (
-    <div className="gex-board">
+    <div className="gex-board gex-fit">
       <header className="gex-header">
         <div>
           <p className="gex-header__pill">GLOBAL EXCHANGE</p>

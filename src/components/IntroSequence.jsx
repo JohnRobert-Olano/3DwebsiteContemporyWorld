@@ -8,14 +8,14 @@ const VARIANT_CONFIG = {
 };
 
 const SPIN_END_RATIO = 0.65;
-const SUBTITLE_FADE_START_RATIO = 0.5;
 const OUTRO_START_RATIO = 0.88;
 const STATIC_OUTRO_START_RATIO = 0.72;
 
-const WORLD_LETTERS = 'WORLD'.split('');
+const TITLE_TEXT = 'World View';
+const TITLE_GLYPHS = Array.from(TITLE_TEXT);
 const SPIN_END_DEG = 0;
-const LETTER_ANGLE_DEG = 22;
-const RADIUS = 500;
+const LETTER_ANGLE_DEG = 11.5;
+const RADIUS = 720;
 
 const STAR_COORDS = [
   { top: '12%', left: '18%', delay: 0.2 },
@@ -90,36 +90,34 @@ export default function IntroSequence({ onComplete }) {
   }, [cfg.totalMs, onComplete]);
 
   let cylinderAngle;
-  let subtitleOpacity;
   let overallOpacity;
 
   if (cfg.isStatic) {
     cylinderAngle = 0;
     const fadeIn = easeOutCubic(Math.min(1, progress / 0.35));
-    subtitleOpacity = fadeIn;
     const outroT = Math.max(0, (progress - STATIC_OUTRO_START_RATIO) / (1 - STATIC_OUTRO_START_RATIO));
     overallOpacity = fadeIn * (1 - outroT);
   } else {
     const spinT = Math.min(1, progress / SPIN_END_RATIO);
     cylinderAngle = cfg.spinStartDeg + (SPIN_END_DEG - cfg.spinStartDeg) * easeOutQuart(spinT);
-    const subtitleFadeT = Math.max(0, Math.min(1, (progress - SUBTITLE_FADE_START_RATIO) / (0.8 - SUBTITLE_FADE_START_RATIO)));
-    subtitleOpacity = easeOutCubic(subtitleFadeT);
     const outroT = Math.max(0, Math.min(1, (progress - OUTRO_START_RATIO) / (1 - OUTRO_START_RATIO)));
     overallOpacity = 1 - outroT;
   }
 
-  const halfIdx = (WORLD_LETTERS.length - 1) / 2;
+  const halfIdx = (TITLE_GLYPHS.length - 1) / 2;
 
   return (
     <motion.div
-      className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden pointer-events-none bg-black"
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden pointer-events-none bg-transparent"
       style={{ opacity: overallOpacity }}
       aria-hidden="true"
     >
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_46%,rgba(255,255,255,0.03),transparent_24%),radial-gradient(circle_at_50%_50%,transparent_0%,rgba(0,0,0,0.05)_36%,rgba(0,0,0,0.46)_100%)]" />
+
       {/* Central Glow */}
       {!cfg.isStatic && (
         <div
-          className="absolute h-[80vh] w-[80vh] rounded-full opacity-10 blur-[120px]"
+          className="absolute z-[1] h-[80vh] w-[80vh] rounded-full opacity-10 blur-[120px]"
           style={{
             background: `radial-gradient(circle, var(--accent) 0%, transparent 70%)`,
             transform: `scale(${0.5 + progress * 1.5})`,
@@ -129,12 +127,42 @@ export default function IntroSequence({ onComplete }) {
 
       {/* SVG Cylinder Projection */}
       <svg
-        viewBox="-800 -400 1600 800"
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{ width: 'min(100vmin, 1400px)', height: 'auto' }}
+        viewBox="-1000 -430 2000 860"
+        className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
+        style={{ width: 'min(124vmin, 1540px)', height: 'auto' }}
+        role="img"
+        aria-label="World View"
       >
+        <defs>
+          <linearGradient id="world-view-metal" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="18%" stopColor="#d8e9ff" />
+            <stop offset="42%" stopColor="#8492a8" />
+            <stop offset="56%" stopColor="#ffffff" />
+            <stop offset="78%" stopColor="#a9b3c4" />
+            <stop offset="100%" stopColor="#f7fbff" />
+          </linearGradient>
+          <linearGradient id="world-view-rim" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+            <stop offset="48%" stopColor="#a5c8f8" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#f26d5b" stopOpacity="0.72" />
+          </linearGradient>
+          <filter id="world-view-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="9" result="blur" />
+            <feColorMatrix
+              in="blur"
+              type="matrix"
+              values="0.75 0 0 0 0.24  0 0.78 0 0 0.42  0 0 1 0 0.78  0 0 0 0.82 0"
+              result="blueGlow"
+            />
+            <feMerge>
+              <feMergeNode in="blueGlow" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
         <g>
-          {WORLD_LETTERS.map((char, i) => {
+          {TITLE_GLYPHS.map((char, i) => {
             const baseAngle = (i - halfIdx) * LETTER_ANGLE_DEG;
             const totalAngleDeg = baseAngle + cylinderAngle;
             const angleRad = toRad(totalAngleDeg);
@@ -145,47 +173,91 @@ export default function IntroSequence({ onComplete }) {
             const x = Math.sin(angleRad) * RADIUS;
             const scaleX = Math.abs(cos);
             const opacity = Math.min(1, cos * 2);
+            const isSpace = char === ' ';
 
             return (
-              <text
+              <g
                 key={i}
-                x="0"
-                y="0"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="font-display font-black"
-                fontSize="240"
-                fill="white"
-                style={{
-                  transform: `translate(${x.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, 1)`,
-                  opacity: opacity.toFixed(3),
-                }}
+                transform={`translate(${x.toFixed(2)} 0) scale(${scaleX.toFixed(4)} 1)`}
+                opacity={opacity.toFixed(3)}
               >
-                {char}
-              </text>
+                {!isSpace && (
+                  <>
+                    <text
+                      x="0"
+                      y="0"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="world-view-title-glyph"
+                      fontSize="190"
+                      fill="rgba(0,5,16,0.72)"
+                      transform="translate(13 16)"
+                    >
+                      {char}
+                    </text>
+                    <text
+                      x="0"
+                      y="0"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="world-view-title-glyph"
+                      fontSize="190"
+                      fill="rgba(18,33,58,0.72)"
+                      transform="translate(7 9)"
+                    >
+                      {char}
+                    </text>
+                    <text
+                      x="0"
+                      y="0"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="world-view-title-glyph"
+                      fontSize="190"
+                      fill="url(#world-view-metal)"
+                      stroke="rgba(2,8,18,0.86)"
+                      strokeWidth="13"
+                      paintOrder="stroke fill"
+                      filter="url(#world-view-glow)"
+                    >
+                      {char}
+                    </text>
+                    <text
+                      x="0"
+                      y="-5"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="world-view-title-glyph"
+                      fontSize="190"
+                      fill="none"
+                      stroke="url(#world-view-rim)"
+                      strokeWidth="3"
+                      opacity="0.92"
+                    >
+                      {char}
+                    </text>
+                    <text
+                      x="-3"
+                      y="-18"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="world-view-title-glyph"
+                      fontSize="190"
+                      fill="rgba(255,255,255,0.34)"
+                    >
+                      {char}
+                    </text>
+                  </>
+                )}
+              </g>
             );
           })}
         </g>
-        
-        {/* Subtitle */}
-        <text
-           x="0"
-           y="240"
-           textAnchor="middle"
-           className="font-mono"
-           fontSize="20"
-           fill="var(--accent)"
-           letterSpacing="12"
-           opacity={subtitleOpacity}
-           style={{ textTransform: 'uppercase' }}
-        >
-          Perspective Access
-        </text>
       </svg>
 
       {/* Minimal Starfield */}
       {!cfg.isStatic && (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 z-[2]">
           {STAR_COORDS.map((star, i) => (
             <motion.div
               key={i}

@@ -30,6 +30,16 @@ const THEMES = {
     landStroke: 'rgba(38,112,46,0.55)',
     grid: 'rgba(18,70,110,0.10)',
   },
+  // Flight-ops radar look used ONLY by the Global Delivery Simulator: deep navy
+  // ocean, cyan-tinted landmasses, faint cyan graticule.
+  ops: {
+    oceanId: 'fwm-ocean-ops',
+    landId: 'fwm-land-ops',
+    ocean: ['#0b2036', '#06121f'],
+    land: ['#1d5570', '#123a4f'],
+    landStroke: 'rgba(96,209,255,0.45)',
+    grid: 'rgba(96,209,255,0.10)',
+  },
 };
 
 export default function FlatWorldMap({ children, className = '', ariaLabel = 'World map', theme = 'dark' }) {
