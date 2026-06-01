@@ -4,6 +4,7 @@ import Lenis from 'lenis';
 
 const CesiumEarth = lazy(() => import('./components/CesiumEarth'));
 import Content from './components/Content';
+import GlobeBackdrop from './components/GlobeBackdrop';
 import LoadingScreen from './components/LoadingScreen';
 import IntroSequence from './components/IntroSequence';
 import ScrollProgress from './components/ScrollProgress';
@@ -15,6 +16,8 @@ function App() {
   const [introActive, setIntroActive] = useState(false);
   const [earthReady, setEarthReady] = useState(false);
   const [earthError, setEarthError] = useState(false);
+  // Landmark warm-up progress shown on the boot loader ({ done, total }).
+  const [warmup, setWarmup] = useState(null);
   const lenisRef = useRef(null);
 
   // The boot loading screen owns the first-render gate until Cesium confirms the
@@ -59,6 +62,8 @@ function App() {
   };
 
   const handleEarthReady = useCallback(() => setEarthReady(true), []);
+
+  const handleWarmupProgress = useCallback((done, total) => setWarmup({ done, total }), []);
 
   const handleEarthError = useCallback(() => {
     setEarthError(true);
@@ -110,7 +115,7 @@ function App() {
       {/* Boot loading gate — owns the first render until the Earth is visually
           ready, then fades out and hands off to the World View intro. */}
       <AnimatePresence onExitComplete={handleBootGateExit}>
-        {booting && <LoadingScreen key="boot" />}
+        {booting && <LoadingScreen key="boot" warmup={warmup} />}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -155,9 +160,17 @@ function App() {
       {/* Scroll progress bar (top sliver) */}
       <ScrollProgress />
 
+      {/* Cinematic word-reveal layer — sits BEHIND the transparent globe canvas
+          so the real Earth occludes the title. Driven by globe-reveal events. */}
+      <GlobeBackdrop />
+
       {/* Immersive 3D Earth Layer (Fixed Background) */}
       <Suspense fallback={<LoadingScreen />}>
-        <CesiumEarth onVisualReady={handleEarthReady} onSetupError={handleEarthError} />
+        <CesiumEarth
+          onVisualReady={handleEarthReady}
+          onSetupError={handleEarthError}
+          onWarmupProgress={handleWarmupProgress}
+        />
       </Suspense>
 
       {/* GSAP DOM Scrollytelling Layer (Foreground) */}

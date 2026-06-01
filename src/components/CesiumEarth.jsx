@@ -16,6 +16,23 @@ const EARTH_OVERVIEW_ZOOM = 1.12;
 const EARTH_ROTATION_DEGREES_PER_SECOND = 0.82;
 const EARTH_MOTION_EASE = 0.0055;
 
+// ── Landmark warm-up tuning ─────────────────────────────────────────────────
+// Behind the boot loader we teleport the camera to each of the 12 destination
+// views and wait for their photorealistic tiles to load, so later scroll-driven
+// transitions don't start from blank/gray meshes. Bounded so a slow or failed
+// view can never hang the boot.
+const WARMUP_PER_DEST_TIMEOUT_MS = 9000; // max wait for one view's full detail
+const WARMUP_SETTLE_MS = 350;            // fully-loaded must hold this long = settled
+const WARMUP_MIN_WAIT_MS = 300;          // give traversal time to request tiles first
+const WARMUP_OVERALL_TIMEOUT_MS = 100000; // hard cap on the whole warm-up pass
+const WARMUP_SAMPLE_WAIT_CAP_MS = 8000;  // cap on awaiting ground-height sampling
+const WARMUP_POLL_MS = 100;
+// Each landmark is warmed at TWO views the live flight passes through: the
+// mid-flight regional approach (≈ zoomThroughEarthLayers' regionalPose) and the
+// final close-up - so the descent and the landing are both resident.
+const WARMUP_APPROACH_ZOOM = 5.35;
+const WARMUP_APPROACH_PITCH = 32; // Mapbox pitch -> Cesium -58 via poseFromMapbox
+
 function SetupErrorState({ message }) {
   return (
     <section
@@ -232,11 +249,12 @@ function buildEarthIdleDriver() {
   };
 }
 
-export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
+export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgress } = {}) {
   const containerRef = useRef(null);
   const containerOuterRef = useRef(null);
   const viewerRef = useRef(null);
   const visualReadyNotifiedRef = useRef(false);
+  const onWarmupProgressRef = useRef(onWarmupProgress);
   const [setupError, setSetupError] = useState('');
   const [tilesVisualReady, setTilesVisualReady] = useState(false);
   // True while the Photorealistic 3D Tiles streamer has pending tile requests.
@@ -269,6 +287,12 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
     if (initialSetupError) onSetupError?.();
   }, [initialSetupError, onSetupError]);
 
+  // Keep the warm-up progress callback current without re-running the heavy
+  // viewer effect (which only depends on the API keys).
+  useEffect(() => {
+    onWarmupProgressRef.current = onWarmupProgress;
+  }, [onWarmupProgress]);
+
   useEffect(() => {
     if (!googleApiKey || !ionToken) return undefined;
 
@@ -289,12 +313,17 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
       // imagery layer needed. We still keep the globe ellipsoid alive for
       // SceneTransforms math but hide it.
       baseLayer: false,
+      // Transparent drawing buffer so the cinematic word reveals can sit in a
+      // DOM layer BEHIND this canvas and be occluded by the real Earth.
+      contextOptions: { webgl: { alpha: true } },
     });
     viewer.scene.globe.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.fog.enabled = false;
     viewer.scene.skyBox.show = false;
-    viewer.scene.backgroundColor = Cesium.Color.fromBytes(2, 4, 12, 255);
+    // Transparent clear colour: the dark page background (and any reveal title
+    // layered behind the canvas) shows through the empty space around the globe.
+    viewer.scene.backgroundColor = Cesium.Color.TRANSPARENT;
 
     // ── Mouse / wheel / touch controls ─────────────────────────────────────
     // Left-drag pans, right-drag orbits (changes the viewing angle), middle-
@@ -318,6 +347,9 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
       userInteractionCount: 0,
       destinationActiveIndex: null,
       activeFlightToken: null,
+      // True while the offscreen landmark warm-up owns the camera (boot only),
+      // so the idle/tour drivers in the RAF tick stand down.
+      warmupActive: false,
       // Timestamp of the last user gesture (drag, wheel, touch). Camera
       // drivers yield while this is recent so the camera doesn't snap back
       // the instant the user lets go of the mouse.
@@ -382,20 +414,133 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
     let tileset = null;
     let cancelledTilesetLoad = false;
     let pendingDebounce = 0;
-    let visualRevealTimeout = 0;
-    let revealedFirstTile = false;
-    const revealPhotorealTiles = () => {
-      if (cancelledTilesetLoad || revealedFirstTile) return;
-      revealedFirstTile = true;
-      visualRevealTimeout = window.setTimeout(() => {
-        if (!cancelledTilesetLoad) setTilesVisualReady(true);
-      }, 180);
-      if (tileset?.tileVisible) {
-        tileset.tileVisible.removeEventListener(revealPhotorealTiles);
+    let samplePromise = null;
+    let warmupTimer = 0;
+    let firstTileSeen = false;
+
+    const delay = (ms) => new Promise((resolve) => {
+      warmupTimer = window.setTimeout(resolve, ms);
+    });
+
+    // Resolve once the tileset has FULLY streamed the current camera view: it
+    // requested tiles, `tilesLoaded` (every tile meeting the screen-space error
+    // this frame) is true, and pending+processing held at zero for a short
+    // stable window - or `timeoutMs` elapsed, or the load was cancelled.
+    const waitForTilesSettled = (ts, timeoutMs) => new Promise((resolve) => {
+      const start = performance.now();
+      let requested = false;
+      let idleSince = null;
+      const poll = () => {
+        if (cancelledTilesetLoad || !ts) { resolve('cancelled'); return; }
+        const stats = ts.statistics;
+        const pending = stats.numberOfPendingRequests + stats.numberOfTilesProcessing;
+        const elapsed = performance.now() - start;
+        if (pending > 0) requested = true;
+        const fullyLoaded = pending === 0 && ts.tilesLoaded === true
+          && (requested || elapsed >= WARMUP_MIN_WAIT_MS);
+        if (fullyLoaded) {
+          if (idleSince == null) idleSince = performance.now();
+          if (performance.now() - idleSince >= WARMUP_SETTLE_MS) { resolve('settled'); return; }
+        } else {
+          idleSince = null;
+        }
+        if (elapsed >= timeoutMs) { resolve('timeout'); return; }
+        warmupTimer = window.setTimeout(poll, WARMUP_POLL_MS);
+      };
+      poll();
+    });
+
+    // Offscreen warm-up: visit each of the 12 destination camera poses behind
+    // the loading screen so their tiles are resident before the real journey.
+    const runWarmup = async () => {
+      const total = destinations.length;
+      codex.warmupActive = true;
+      if (!cancelledTilesetLoad) onWarmupProgressRef.current?.(0, total);
+
+      // Let ground-height sampling fill codex.elevations so each warm-up frame
+      // matches the real transition framing (capped so it can't hang).
+      if (samplePromise) {
+        try { await Promise.race([samplePromise, delay(WARMUP_SAMPLE_WAIT_CAP_MS)]); } catch { /* ignore */ }
       }
-      if (tileset?.initialTilesLoaded) {
-        tileset.initialTilesLoaded.removeEventListener(revealPhotorealTiles);
+
+      // Force the highest target detail across each warmed view: no coarse-first
+      // pass, no foveated periphery delay, no distance SSE relaxation, load the
+      // desired LOD directly. Restored to the smooth progressive runtime config
+      // afterwards so the live experience still streams in nicely.
+      const ts = tileset;
+      const savedConfig = ts && {
+        foveatedScreenSpaceError: ts.foveatedScreenSpaceError,
+        dynamicScreenSpaceError: ts.dynamicScreenSpaceError,
+        immediatelyLoadDesiredLevelOfDetail: ts.immediatelyLoadDesiredLevelOfDetail,
+        baseScreenSpaceError: ts.baseScreenSpaceError,
+      };
+      if (ts) {
+        ts.foveatedScreenSpaceError = false;
+        ts.dynamicScreenSpaceError = false;
+        ts.immediatelyLoadDesiredLevelOfDetail = true;
+        ts.baseScreenSpaceError = ts.maximumScreenSpaceError;
       }
+
+      // Teleport to a view, then wait for its tiles to fully load.
+      const warmPose = async (dest, zoom, pitch, bearing, altitude, label) => {
+        if (cancelledTilesetLoad || !tileset) return;
+        const pose = poseFromMapbox({ center: destinationToLngLat(dest), zoom, pitch, bearing }, altitude);
+        setCameraPose(viewer, pose);
+        codex.lastAppliedPose = pose;
+        const result = await waitForTilesSettled(tileset, WARMUP_PER_DEST_TIMEOUT_MS);
+        if (result === 'timeout') {
+          console.warn(`[CesiumEarth] landmark warm-up timed out for ${dest.id} (${label}); continuing`);
+        }
+      };
+
+      try {
+        const overallDeadline = performance.now() + WARMUP_OVERALL_TIMEOUT_MS;
+        for (let i = 0; i < total; i += 1) {
+          if (cancelledTilesetLoad || !tileset) break;
+          if (performance.now() > overallDeadline) {
+            console.warn('[CesiumEarth] landmark warm-up hit the overall timeout; starting with a partial preload');
+            break;
+          }
+          const dest = destinations[i];
+          const camera = getDestinationCamera(dest);
+          const altitude = camera.altitude ?? codex.elevations.get(dest.id) ?? 100;
+
+          // (a) Mid-flight regional approach over the destination, then
+          // (b) the final landmark close-up. Both views the live transition
+          // passes through are loaded to full detail before the journey.
+          await warmPose(dest, WARMUP_APPROACH_ZOOM, WARMUP_APPROACH_PITCH, camera.bearing, altitude, 'approach');
+          if (cancelledTilesetLoad) break;
+          await warmPose(dest, camera.zoom, camera.pitch, camera.bearing, altitude, 'landing');
+          if (cancelledTilesetLoad) break;
+          onWarmupProgressRef.current?.(i + 1, total);
+        }
+      } finally {
+        if (ts && savedConfig) {
+          ts.foveatedScreenSpaceError = savedConfig.foveatedScreenSpaceError;
+          ts.dynamicScreenSpaceError = savedConfig.dynamicScreenSpaceError;
+          ts.immediatelyLoadDesiredLevelOfDetail = savedConfig.immediatelyLoadDesiredLevelOfDetail;
+          ts.baseScreenSpaceError = savedConfig.baseScreenSpaceError;
+        }
+      }
+
+      // Restore the neutral Earth overview before handing off to the intro.
+      if (!cancelledTilesetLoad) {
+        setCameraPose(viewer, initialPose);
+        codex.lastAppliedPose = initialPose;
+      }
+      codex.warmupActive = false;
+      if (!cancelledTilesetLoad) setTilesVisualReady(true);
+    };
+
+    // First visible photorealistic tile = initial Earth is ready. Rather than
+    // revealing the site immediately, start the offscreen landmark warm-up; the
+    // loader stays up until runWarmup finishes (or times out).
+    const onFirstTile = () => {
+      if (cancelledTilesetLoad || firstTileSeen) return;
+      firstTileSeen = true;
+      if (tileset?.tileVisible) tileset.tileVisible.removeEventListener(onFirstTile);
+      if (tileset?.initialTilesLoaded) tileset.initialTilesLoaded.removeEventListener(onFirstTile);
+      runWarmup();
     };
 
     (async () => {
@@ -414,8 +559,8 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
         // Default cache (~512 MB) is small for a 12-stop tour; tiles get
         // evicted by the time the user scrolls back. 1.5 GB keeps every
         // landmark's high-detail meshes resident after the first visit.
-        tileset.cacheBytes = 1_500_000_000;
-        tileset.maximumCacheOverflowBytes = 500_000_000;
+        tileset.cacheBytes = 3_000_000_000;
+        tileset.maximumCacheOverflowBytes = 1_000_000_000;
         // Both default true - explicit so a future Cesium version doesn't
         // silently flip them off. preloadFlightDestinations is the big one
         // for us: during a flyTo, Cesium starts traversing the *destination*
@@ -454,8 +599,8 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
           }
         };
         tileset.loadProgress.addEventListener(updateStreamingState);
-        tileset.tileVisible.addEventListener(revealPhotorealTiles);
-        tileset.initialTilesLoaded.addEventListener(revealPhotorealTiles);
+        tileset.tileVisible.addEventListener(onFirstTile);
+        tileset.initialTilesLoaded.addEventListener(onFirstTile);
 
         viewer.scene.primitives.add(tileset);
 
@@ -473,7 +618,7 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
         const cartographics = sampleTargets.map((p) =>
           Cesium.Cartographic.fromDegrees(p.lon, p.lat),
         );
-        viewer.scene
+        samplePromise = viewer.scene
           .sampleHeightMostDetailed(cartographics)
           .then((carts) => {
             carts.forEach((c, i) => {
@@ -540,6 +685,13 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
       lastTime = time;
       const viewerNow = viewerRef.current;
       if (!viewerNow || viewerNow.isDestroyed()) return;
+
+      // The offscreen landmark warm-up owns the camera during boot - don't let
+      // the idle/tour drivers move it while we visit each destination view.
+      if (codex.warmupActive) {
+        frameId = requestAnimationFrame(tick);
+        return;
+      }
 
       const tourState = getDestinationTourState();
       if (tourState.active) {
@@ -612,7 +764,8 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
 
     return () => {
       cancelledTilesetLoad = true;
-      clearTimeout(visualRevealTimeout);
+      codex.warmupActive = false;
+      clearTimeout(warmupTimer);
       clearTimeout(pendingDebounce);
       cancelAnimationFrame(frameId);
       if (codex.cancelActivePan) {
@@ -629,10 +782,10 @@ export default function CesiumEarth({ onVisualReady, onSetupError } = {}) {
       canvas.removeEventListener('wheel', bumpInteraction);
       viewer.camera.changed.removeEventListener(onCameraChanged);
       if (tileset?.tileVisible) {
-        tileset.tileVisible.removeEventListener(revealPhotorealTiles);
+        tileset.tileVisible.removeEventListener(onFirstTile);
       }
       if (tileset?.initialTilesLoaded) {
-        tileset.initialTilesLoaded.removeEventListener(revealPhotorealTiles);
+        tileset.initialTilesLoaded.removeEventListener(onFirstTile);
       }
       cameraChangedListeners.clear();
       if (window.codexMap === mapShim) delete window.codexMap;

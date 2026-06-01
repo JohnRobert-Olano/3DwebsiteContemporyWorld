@@ -1,7 +1,13 @@
 import { motion } from 'framer-motion';
 import SpinningGlobe from './SpinningGlobe';
 
-export default function LoadingScreen() {
+export default function LoadingScreen({ warmup } = {}) {
+  // While the landmark warm-up is running, count progress; otherwise the globe
+  // is still rendering its first view.
+  const label = warmup && warmup.total > 0
+    ? `Preparing historical epochs ${warmup.done}/${warmup.total}`
+    : 'Rendering Earth';
+
   return (
     <motion.div
       initial={{ opacity: 1 }}
@@ -15,7 +21,7 @@ export default function LoadingScreen() {
         <SpinningGlobe />
         <div className="earth-preload-label" role="status" aria-live="polite">
           <span className="earth-preload-label__dot" />
-          <span>Rendering Earth</span>
+          <span>{label}</span>
         </div>
       </div>
     </motion.div>

@@ -156,7 +156,6 @@ const setDestinationTourState = (index) => {
   return true;
 };
 
-const FINAL_DESTINATION_ID = 'world-trade-center-nyc';
 // How long the camera must hold steady (codexDestinationFlying === false)
 // before we accept it as "settled" and trigger the title-in animation. Too
 // short and a brief flyTo cancellation will re-enter the title prematurely;
@@ -228,13 +227,15 @@ function ContentSection({ sec, index, onActive, onLeave }) {
     // intentionally larger than the duration-relative micro-cascade the
     // previous X-slide used, so the reveal reads as discrete word-by-word
     // beats instead of a near-simultaneous block fade.
+    gsap.killTweensOf(words);
     gsap.set(words, { opacity: 0, x: 0, y: 28 });
 
     let activeTl = null;
 
-    const playEnter = () => {
+    const playEnter = (direction = 'forward') => {
       activeTl?.kill();
-      gsap.set(words, { opacity: 0, x: 0, y: 28 });
+      gsap.killTweensOf(words);
+      gsap.set(words, { opacity: 0, x: 0, y: direction === 'back' ? -28 : 28 });
       activeTl = gsap.timeline();
       activeTl.to(headlineWords, {
         opacity: 1,
@@ -252,19 +253,20 @@ function ContentSection({ sec, index, onActive, onLeave }) {
       }, 0.12);
     };
 
-    const playExit = () => {
+    const playExit = (direction = 'forward') => {
       activeTl?.kill();
+      gsap.killTweensOf(words);
       activeTl = gsap.timeline();
       activeTl.to(headlineWords, {
         opacity: 0,
-        y: -22,
+        y: direction === 'back' ? 22 : -22,
         duration: 0.42,
         ease: 'power2.in',
         stagger: 0.035,
       }, 0);
       activeTl.to(detailWords, {
         opacity: 0,
-        y: -22,
+        y: direction === 'back' ? 22 : -22,
         duration: 0.34,
         ease: 'power2.in',
         stagger: 0.022,
@@ -275,14 +277,15 @@ function ContentSection({ sec, index, onActive, onLeave }) {
       trigger: section,
       start: 'top center',
       end: 'bottom center',
-      onEnter: () => { onActive?.(index); playEnter(); },
-      onEnterBack: () => { onActive?.(index); playEnter(); },
-      onLeave: () => { onLeave?.(index); playExit(); },
-      onLeaveBack: () => { onLeave?.(index); playExit(); },
+      onEnter: () => { onActive?.(index); playEnter('forward'); },
+      onEnterBack: () => { onActive?.(index); playEnter('back'); },
+      onLeave: () => { onLeave?.(index); playExit('forward'); },
+      onLeaveBack: () => { onLeave?.(index); playExit('back'); },
     });
 
     return () => {
       activeTl?.kill();
+      gsap.killTweensOf(words);
       st.kill();
     };
   }, [index, onActive, onLeave]);
@@ -358,11 +361,100 @@ function ContentSection({ sec, index, onActive, onLeave }) {
   );
 }
 
+/* ────────────────────────────────────────────────────────────
+   RevealPanel
+   Full-height cinematic panel for the two word reveals and the
+   post-WTC globe zoom-out. Mirrors ContentSection: a center-triggered
+   ScrollTrigger toggles `active` (which drives GlobeWordReveal) and runs an
+   optional `onEnter` side effect (recentre the globe / fly back to overview).
+   `children` may be a render prop receiving `active` so a panel can reveal a
+   CTA only while it is on screen.
+   ──────────────────────────────────────────────────────────── */
+function RevealPanel({
+  id,
+  text,
+  overview,
+  onEnter,
+  onEnterBack,
+  onLeave,
+  onLeaveBack,
+  children,
+}) {
+  const ref = useRef(null);
+  const [active, setActive] = useState(false);
+  const onEnterRef = useRef(onEnter);
+  const onEnterBackRef = useRef(onEnterBack);
+  const onLeaveRef = useRef(onLeave);
+  const onLeaveBackRef = useRef(onLeaveBack);
+
+  useEffect(() => {
+    onEnterRef.current = onEnter;
+    onEnterBackRef.current = onEnterBack;
+    onLeaveRef.current = onLeave;
+    onLeaveBackRef.current = onLeaveBack;
+  }, [onEnter, onEnterBack, onLeave, onLeaveBack]);
+
+  // Drive the GlobeBackdrop (rendered BEHIND the transparent globe canvas) so
+  // the real Earth occludes the title. The panel itself stays empty/invisible.
+  useEffect(() => {
+    if (!text) return undefined;
+    window.dispatchEvent(new CustomEvent('globe-reveal', { detail: { text, active } }));
+    return undefined;
+  }, [text, active]);
+
+  useEffect(() => {
+    const section = ref.current;
+    if (!section) return undefined;
+
+    const enter = (direction) => {
+      setActive(true);
+      // Recentre the globe so its disc sits behind the title.
+      window.globeTargetDirection = 0;
+      const callback = direction === 'back'
+        ? (onEnterBackRef.current || onEnterRef.current)
+        : onEnterRef.current;
+      callback?.({ direction });
+    };
+    const leave = (direction) => {
+      setActive(false);
+      const callback = direction === 'back'
+        ? (onLeaveBackRef.current || onLeaveRef.current)
+        : onLeaveRef.current;
+      callback?.({ direction });
+    };
+
+    const st = ScrollTrigger.create({
+      trigger: section,
+      start: 'top center',
+      end: 'bottom center',
+      onEnter: () => enter('forward'),
+      onEnterBack: () => enter('back'),
+      onLeave: () => leave('forward'),
+      onLeaveBack: () => leave('back'),
+    });
+    return () => st.kill();
+  }, []);
+
+  return (
+    <section
+      id={id}
+      ref={ref}
+      data-globe-overview={overview ? '' : undefined}
+      className="panel-section relative w-full overflow-hidden"
+      style={{ minHeight: '100dvh' }}
+      aria-label={text || undefined}
+    >
+      {typeof children === 'function' ? children(active) : children}
+    </section>
+  );
+}
+
 export default function Content({ lenisRef }) {
   const containerRef = useRef(null);
   const [activeSection, setActiveSection] = useState(-1);
   const [activeJourneyIndex, setActiveJourneyIndex] = useState(-1);
   const [isJourneyMenuOpen, setIsJourneyMenuOpen] = useState(false);
+  const activeSectionRef = useRef(-1);
   const activeJourneyIndexRef = useRef(-1);
 
   // ── Title state machine ──────────────────────────────────
@@ -382,6 +474,9 @@ export default function Content({ lenisRef }) {
   const pendingActionRef = useRef(null);
 
   useEffect(() => {
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
+  useEffect(() => {
     visibleTitleIndexRef.current = visibleTitleIndex;
   }, [visibleTitleIndex]);
   useEffect(() => {
@@ -396,11 +491,29 @@ export default function Content({ lenisRef }) {
     && window.matchMedia
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  const clearLandmarkChrome = useCallback((nextActiveSection = -1, endingActive = false) => {
+    activeSectionRef.current = nextActiveSection;
+    activeJourneyIndexRef.current = -1;
+    visibleTitleIndexRef.current = -1;
+    titlePhaseRef.current = 'hidden';
+    pendingActionRef.current = null;
+
+    setActiveSection(nextActiveSection);
+    setActiveJourneyIndex(-1);
+    setVisibleTitleIndex(-1);
+    setTitlePhase('hidden');
+
+    window.destinationTourActive = false;
+    window.destinationTourState = { index: 0, progress: 0 };
+    window.codexEndingActive = endingActive;
+    window.globeTargetDirection = 0;
+  }, []);
+
   // Stable callbacks for ContentSection ScrollTriggers. The globe tilt and
   // active-section state used to live in the parent effect; lifting them out
   // here keeps the ContentSection effect deps stable across renders.
   const handleSectionEnter = useCallback((sectionIndex) => {
-    setActiveSection(sectionIndex);
+    clearLandmarkChrome(sectionIndex, false);
     window.globeTargetDirection = sectionIndex % 2 === 0 ? -1 : 1;
     if (sectionIndex === sections.length - 1) {
       window.codexTechnologyPanelHoldUntil = Math.max(
@@ -415,9 +528,12 @@ export default function Content({ lenisRef }) {
         window.codexTechnologyPanelArmed = true;
       }, TECHNOLOGY_GESTURE_QUIET_MS);
     }
-  }, []);
+  }, [clearLandmarkChrome]);
 
-  const handleSectionLeave = useCallback(() => {
+  const handleSectionLeave = useCallback((sectionIndex) => {
+    if (activeSectionRef.current !== sectionIndex) return;
+    activeSectionRef.current = -1;
+    setActiveSection(-1);
     window.globeTargetDirection = 0;
   }, []);
 
@@ -468,6 +584,11 @@ export default function Content({ lenisRef }) {
   const activateJourneyIndex = useCallback((index) => {
     if (index < 0 || index >= destinations.length) return;
     if (window.projectsFinaleTransitioning) return;
+    // During the post-WTC ending (zoom-out / Historical Epochs), ignore
+    // automatic landmark re-activation - including the viewport sync's deferred
+    // timers - so the globe stays pulled back. Returning into the tour clears
+    // this flag via the destination pins / settleJourneyIndex below.
+    if (window.codexEndingActive) return;
     if (
       activeJourneyIndexRef.current === index
       && window.destinationTourActive
@@ -477,6 +598,7 @@ export default function Content({ lenisRef }) {
     }
     const didRequestTour = setDestinationTourState(index);
     activeJourneyIndexRef.current = index;
+    activeSectionRef.current = sections.length + index;
     setActiveSection(sections.length + index);
     setActiveJourneyIndex(index);
     if (!didRequestTour) {
@@ -486,6 +608,8 @@ export default function Content({ lenisRef }) {
 
   const settleJourneyIndex = useCallback((index) => {
     if (index < 0 || index >= destinations.length) return;
+    // Explicitly navigating to a landmark leaves the post-WTC ending state.
+    window.codexEndingActive = false;
     ScrollTrigger.update();
     window.requestAnimationFrame(() => {
       ScrollTrigger.update();
@@ -503,6 +627,8 @@ export default function Content({ lenisRef }) {
     window.projectsFinaleUnlocked = false;
     window.projectsFinaleReady = false;
     window.projectsFinaleTransitioning = false;
+    window.codexEndingActive = false;
+    activeSectionRef.current = -1;
     document.body.classList.remove('in-projects-finale');
 
     const reducedMotion =
@@ -543,15 +669,20 @@ export default function Content({ lenisRef }) {
           pin: true,
           anticipatePin: 1,
           onEnter: () => {
+            window.codexEndingActive = false;
             activateJourneyIndex(i);
           },
           onEnterBack: () => {
+            window.codexEndingActive = false;
             activateJourneyIndex(i);
           },
           onLeaveBack: () => {
+            window.codexEndingActive = false;
             if (i === 0) {
               window.destinationTourActive = false;
+              activeSectionRef.current = -1;
               activeJourneyIndexRef.current = -1;
+              setActiveSection(-1);
               setActiveJourneyIndex(-1);
             } else {
               activateJourneyIndex(i - 1);
@@ -561,6 +692,10 @@ export default function Content({ lenisRef }) {
       });
 
       const syncActiveDestinationFromViewport = () => {
+        // While the post-WTC ending panels (zoom-out / Historical Epochs) are
+        // active, don't let viewport geometry re-activate WTC and fight the
+        // globe pull-back.
+        if (window.codexEndingActive) return;
         const viewportHeight = window.innerHeight;
         const activePanel = destinationPanels.reduce((best, panel, index) => {
           const rect = panel.getBoundingClientRect();
@@ -626,6 +761,7 @@ export default function Content({ lenisRef }) {
       window.projectsFinaleUnlocked = false;
       window.projectsFinaleReady = false;
       window.projectsFinaleTransitioning = false;
+      activeSectionRef.current = -1;
       document.body.classList.remove('in-projects-finale');
     };
   }, [activateJourneyIndex]);
@@ -872,9 +1008,42 @@ export default function Content({ lenisRef }) {
       if (!panels.length) return false;
 
       const currentIdx = findCurrentPanelIdx(panels);
+      // Map a snap panel to its destination via data-destination-index. Non-
+      // destination panels (intro/reveal/zoom-out/content) carry no attribute,
+      // so inserting them never shifts the landmark mapping.
       const activatePanelDestination = (panelIndex) => {
-        const destinationIndex = panelIndex - sections.length;
-        if (destinationIndex < 0 || destinationIndex >= destinations.length) return;
+        const panel = panels[panelIndex];
+        const clearEndingChrome = () => {
+          activeSectionRef.current = -1;
+          activeJourneyIndexRef.current = -1;
+          visibleTitleIndexRef.current = -1;
+          titlePhaseRef.current = 'hidden';
+          pendingActionRef.current = null;
+          setActiveSection(-1);
+          setActiveJourneyIndex(-1);
+          setVisibleTitleIndex(-1);
+          setTitlePhase('hidden');
+          window.destinationTourActive = false;
+          window.destinationTourState = { index: 0, progress: 0 };
+          window.globeTargetDirection = 0;
+          window.codexEndingActive = true;
+        };
+        // Landing on the post-WTC zoom-out panel reliably pulls the camera back
+        // to the full Earth (deterministic, in case the panel's ScrollTrigger
+        // onEnter is missed) and holds the ending so nothing re-activates WTC.
+        if (panel?.dataset?.globeOverview != null) {
+          clearEndingChrome();
+          window.dispatchEvent(new Event('resetGlobe'));
+          return;
+        }
+        if (panel?.id === 'reveal-historical-epochs') {
+          clearEndingChrome();
+          return;
+        }
+        const raw = panel?.dataset?.destinationIndex;
+        if (raw == null) return;
+        const destinationIndex = Number(raw);
+        if (Number.isNaN(destinationIndex)) return;
         settleJourneyIndex(destinationIndex);
       };
 
@@ -1093,10 +1262,14 @@ export default function Content({ lenisRef }) {
     });
   }, [lenisRef]);
 
+  // Mobile section nav jumps by section id (not panel index) - extra cinematic
+  // panels (Globalization / zoom-out / Historical Epochs) now sit among the
+  // .panel-section list, so a raw index would point at the wrong panel.
   const scrollTo = useCallback((index) => {
-    const panels = document.querySelectorAll('.panel-section');
-    if (panels[index]) {
-      withTitleExit(() => scrollToElement(panels[index], window.innerHeight * 0.15));
+    const sec = sections[index];
+    const target = sec && document.getElementById(sec.id);
+    if (target) {
+      withTitleExit(() => scrollToElement(target, window.innerHeight * 0.15));
     }
   }, [scrollToElement, withTitleExit]);
 
@@ -1111,27 +1284,30 @@ export default function Content({ lenisRef }) {
     }
   }, [scrollToElement, settleJourneyIndex, withTitleExit]);
 
-  // Enter the isolated album archive overlay. The archive is a fixed full-screen
-  // layer (see ProjectsFinale -> createPortal), so we do NOT scroll the document
-  // here - that is exactly what used to let the world slide back into view.
-  const openAlbumArchive = useCallback(() => {
-    withTitleExit(() => {
-      // Calm the world behind the overlay: clear any landmark title + tour state.
-      visibleTitleIndexRef.current = -1;
-      titlePhaseRef.current = 'hidden';
-      setVisibleTitleIndex(-1);
-      setTitlePhase('hidden');
-      activeJourneyIndexRef.current = -1;
-      setActiveJourneyIndex(-1);
-      window.destinationTourActive = false;
+  // ── Cinematic reveal-panel side effects ──────────────────────────────────
+  // Drop the landmark chrome (atlas/nav highlight + any visible title) so the
+  // word reveals read as clean full-screen moments.
+  const calmGlobeChrome = useCallback((options = {}) => {
+    clearLandmarkChrome(-1, Boolean(options.ending));
+  }, [clearLandmarkChrome]);
 
-      // Suspend global scrolling and activate archive mode via the unlock event
-      // (ProjectsFinale listens for it).
-      window.codexLenis?.stop?.();
-      window.projectsFinaleUnlocked = true;
-      window.dispatchEvent(new Event('projectsFinaleUnlock'));
-    });
-  }, [withTitleExit]);
+  // Post-WTC zoom-out panel: end the tour and fly the camera from the last
+  // landmark back to the full Earth via CesiumEarth's existing resetGlobe. The
+  // ending flag stops the viewport sync from snapping the active landmark back
+  // to WTC mid-transition.
+  const enterGlobeZoomOut = useCallback(() => {
+    calmGlobeChrome({ ending: true });
+    window.dispatchEvent(new Event('resetGlobe'));
+  }, [calmGlobeChrome]);
+
+  const leaveGlobeZoomOutBack = useCallback(() => {
+    window.codexEndingActive = false;
+  }, []);
+
+  // Historical Epochs reveal: stay on the overview globe (already pulled back).
+  const enterHistoricalReveal = useCallback(() => {
+    calmGlobeChrome({ ending: true });
+  }, [calmGlobeChrome]);
 
   const journeyNavActive = activeSection >= sections.length;
 
@@ -1272,6 +1448,11 @@ export default function Content({ lenisRef }) {
 
       <IntroHero />
 
+      {/* ─── GLOBALIZATION WORD REVEAL ───
+          Cinematic title behind the globe, shown after the intro and before
+          the first pillar section ("The Global Village"). */}
+      <RevealPanel id="reveal-globalization" text="Globalization" onEnter={calmGlobeChrome} />
+
       {/* ─── SECTION PANELS ───
           Editorial typography over the live globe. Headline anchors to the
           outer ping-pong edge; microcopy sits at the opposite-bottom corner
@@ -1288,8 +1469,6 @@ export default function Content({ lenisRef }) {
       ))}
 
       {destinations.map((destination, i) => {
-        const isFinalDestination = destination.id === FINAL_DESTINATION_ID;
-
         // Reduced-motion path: skip the state machine and render the title
         // statically inside each section (each section is viewport-tall, so
         // only the one currently scrolled into view shows its title). For the
@@ -1299,9 +1478,6 @@ export default function Content({ lenisRef }) {
           ? 'visible'
           : (visibleTitleIndex === i ? titlePhase : 'hidden');
 
-        const isFinalDestinationVisible = isFinalDestination
-          && (sectionPhase === 'visible' || sectionPhase === 'entering');
-
         return (
           // Scroll-target section for each landmark. In normal motion the
           // section is just a scroll anchor + WTC CTA host; the title overlay
@@ -1310,6 +1486,7 @@ export default function Content({ lenisRef }) {
           <section
             id={`destination-${destination.id}`}
             key={destination.id}
+            data-destination-index={i}
             className="destination-section panel-section relative w-full overflow-visible"
             style={{ minHeight: '100dvh' }}
           >
@@ -1322,30 +1499,27 @@ export default function Content({ lenisRef }) {
                 onExitComplete={handleTitleExitComplete}
               />
             )}
-            {isFinalDestination && (
-              <div
-                className={`absolute bottom-[18vh] left-[6vw] z-30 transition-all duration-500 ease-out sm:bottom-[12vh] ${
-                  isFinalDestinationVisible
-                    ? 'pointer-events-auto translate-y-0 opacity-100'
-                    : 'pointer-events-none translate-y-3 opacity-0'
-                }`}
-                aria-hidden={!isFinalDestinationVisible}
-              >
-                <button
-                  type="button"
-                  onClick={openAlbumArchive}
-                  aria-label="Open album archive"
-                  disabled={!isFinalDestinationVisible}
-                  tabIndex={isFinalDestinationVisible ? undefined : -1}
-                  className="cursor-pointer rounded-full border border-white/20 bg-white px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-bg shadow-[0_18px_45px_rgba(0,0,0,0.35)] outline-none transition-colors duration-200 hover:border-primary/70 hover:bg-primary hover:text-bg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
-                >
-                  Open articles
-                </button>
-              </div>
-            )}
           </section>
         );
       })}
+
+      {/* ─── POST-WTC ENDING ───
+          One scroll past World Trade Center pulls the camera back to the full
+          globe; the next scroll reveals "Historical Epochs". These are plain
+          .panel-section panels so they join the snap list and the "block past
+          last panel" guard lands on the last one. */}
+      <RevealPanel
+        id="globe-zoomout"
+        overview
+        onEnter={enterGlobeZoomOut}
+        onLeaveBack={leaveGlobeZoomOutBack}
+      />
+
+      <RevealPanel
+        id="reveal-historical-epochs"
+        text="Historical Epochs"
+        onEnter={enterHistoricalReveal}
+      />
 
       {/* ─── Normal-motion title overlay ───
           One LandmarkTitleCard at viewport-overlay scope, driven by the
