@@ -91,6 +91,7 @@ function ProjectCover({ project }) {
   const title = cleanText(project.title);
   const role = cleanText(project.role);
   const useFallback = !project.image || failedImage === project.image;
+  const isPlayable = Boolean(gameRegistry[project.id]);
 
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -140,9 +141,15 @@ function ProjectCover({ project }) {
         </div>
       )}
 
+      {isPlayable && (
+        <div className="project-game-badge">
+          Game
+        </div>
+      )}
+
       {useFallback && (
         <div
-          className="absolute right-4 top-3 font-mono text-[9px] uppercase tracking-[0.24em]"
+          className={`absolute right-4 ${isPlayable ? 'top-10' : 'top-3'} font-mono text-[9px] uppercase tracking-[0.24em]`}
           style={{ color: LABEL_DARK, textShadow: 'none' }}
         >
           {project.year}

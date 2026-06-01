@@ -110,6 +110,31 @@ h1, h2, h3, h4, h5, h6, .font-display {
     0 24px 80px oklch(0% 0 0 / 34%);
 }
 
+.project-game-badge {
+  pointer-events: none;
+  position: absolute;
+  top: 0.72rem;
+  right: 0.72rem;
+  z-index: 5;
+  border: 1px solid rgb(242 109 91 / 78%);
+  border-radius: 3px;
+  background: rgb(7 7 8 / 82%);
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 42%),
+    inset 0 1px 0 rgb(255 255 255 / 12%);
+  color: rgb(255 247 245 / 94%);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  padding: 0.34rem 0.44rem;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 58%);
+  backdrop-filter: blur(6px) saturate(130%);
+  -webkit-backdrop-filter: blur(6px) saturate(130%);
+}
+
 .tech-border {
   border: 0.5px solid var(--border);
 }
@@ -576,6 +601,81 @@ body.album-archive-active .landmark-title-card,
 body.album-archive-active .earth-preload-label {
   opacity: 0;
   pointer-events: none;
+}
+
+/* ── Globe word reveal ─────────────────────────────────────────────────────
+   Monumental cinematic title (GlobeWordReveal.jsx). Rendered in GlobeBackdrop,
+   a DOM layer BEHIND the transparent Cesium canvas, so the real Earth occludes
+   the word's centre - full opacity, no mask, genuinely behind the globe. */
+.globe-word-reveal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 1400px;
+}
+
+.globe-word-reveal__text {
+  margin: 0;
+  max-width: 94vw;
+  font-family: var(--font-display, 'Inter', sans-serif);
+  font-weight: 800;
+  font-size: clamp(3rem, 13vw, 14rem);
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: rgb(232 240 255 / 92%);
+  /* Dimensional depth: layered drop shadows + faint stroke + cool rim glow. */
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 18%),
+    0 2px 2px rgb(0 0 0 / 45%),
+    0 8px 22px rgb(0 0 0 / 60%),
+    0 26px 60px rgb(2 8 22 / 70%),
+    0 0 70px rgb(96 165 250 / 22%);
+  -webkit-text-stroke: 1px rgb(150 190 255 / 18%);
+  /* Out state - lifted back into depth. */
+  opacity: 0;
+  transform: translateZ(-260px) scale(1.22);
+  filter: blur(7px);
+  transition:
+    opacity 1100ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1300ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform, filter;
+}
+
+.globe-word-reveal--historical .globe-word-reveal__text {
+  max-width: 96vw;
+  font-size: clamp(3.5rem, 15.5vw, 18rem);
+  line-height: 0.88;
+}
+
+.globe-word-reveal.is-active .globe-word-reveal__text {
+  opacity: 1;
+  transform: translateZ(0) scale(1);
+  filter: blur(0);
+}
+
+@media (max-width: 640px) {
+  .globe-word-reveal--historical .globe-word-reveal__text {
+    max-width: 92vw;
+    font-size: clamp(3.4rem, 18vw, 6.6rem);
+    line-height: 0.92;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .globe-word-reveal__text {
+    transition: opacity 400ms ease;
+    transform: none;
+    filter: none;
+  }
+
+  .globe-word-reveal.is-active .globe-word-reveal__text {
+    transform: none;
+  }
 }
 
 .album-game-shell {
