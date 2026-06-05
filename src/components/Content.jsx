@@ -584,7 +584,7 @@ export default function Content({ lenisRef }) {
   const activateJourneyIndex = useCallback((index) => {
     if (index < 0 || index >= destinations.length) return;
     if (window.projectsFinaleTransitioning) return;
-    // During the post-WTC ending (zoom-out / Historical Epochs), ignore
+    // During the post-WTC ending (zoom-out / Modern World), ignore
     // automatic landmark re-activation - including the viewport sync's deferred
     // timers - so the globe stays pulled back. Returning into the tour clears
     // this flag via the destination pins / settleJourneyIndex below.
@@ -692,7 +692,7 @@ export default function Content({ lenisRef }) {
       });
 
       const syncActiveDestinationFromViewport = () => {
-        // While the post-WTC ending panels (zoom-out / Historical Epochs) are
+        // While the post-WTC ending panels (zoom-out / Modern World) are
         // active, don't let viewport geometry re-activate WTC and fight the
         // globe pull-back.
         if (window.codexEndingActive) return;
@@ -1036,7 +1036,7 @@ export default function Content({ lenisRef }) {
           window.dispatchEvent(new Event('resetGlobe'));
           return;
         }
-        if (panel?.id === 'reveal-historical-epochs') {
+        if (panel?.id === 'reveal-modern-world') {
           clearEndingChrome();
           return;
         }
@@ -1263,8 +1263,8 @@ export default function Content({ lenisRef }) {
   }, [lenisRef]);
 
   // Mobile section nav jumps by section id (not panel index) - extra cinematic
-  // panels (Globalization / zoom-out / Historical Epochs) now sit among the
-  // .panel-section list, so a raw index would point at the wrong panel.
+  // panels (Globalization / Historical Epochs / zoom-out / Modern World) now sit
+  // among the .panel-section list, so a raw index would point at the wrong panel.
   const scrollTo = useCallback((index) => {
     const sec = sections[index];
     const target = sec && document.getElementById(sec.id);
@@ -1304,10 +1304,34 @@ export default function Content({ lenisRef }) {
     window.codexEndingActive = false;
   }, []);
 
-  // Historical Epochs reveal: stay on the overview globe (already pulled back).
+  // Historical Epochs reveal: now sits BEFORE the first destination (Colosseum),
+  // announcing the historical journey. It must NOT mark the ending (the next
+  // scroll dives into Colosseum), so ending stays false. Scrolling in forward
+  // from the Technology pillar the globe is already at overview; scrolling back
+  // in from a Colosseum close-up we pull it out to the full Earth.
   const enterHistoricalReveal = useCallback(() => {
-    calmGlobeChrome({ ending: true });
+    calmGlobeChrome();
   }, [calmGlobeChrome]);
+
+  const enterHistoricalRevealBack = useCallback(() => {
+    calmGlobeChrome();
+    window.dispatchEvent(new Event('resetGlobe'));
+  }, [calmGlobeChrome]);
+
+  // Modern World reveal: the post-WTC ending. The globe has already pulled back
+  // (globe-zoomout); here we mark the ending and fire the cinematic Earth-exit
+  // (the real Cesium canvas rushes upward + fades, with speed-line streaks).
+  const enterModernReveal = useCallback(() => {
+    calmGlobeChrome({ ending: true });
+    window.dispatchEvent(new CustomEvent('globe-exit', { detail: { active: true } }));
+  }, [calmGlobeChrome]);
+
+  // Scrolling back up out of Modern World: reverse the Earth-exit so the globe
+  // returns cleanly. Re-entering globe-zoomout re-runs enterGlobeZoomOut
+  // (resetGlobe), which restores the overview pose.
+  const leaveModernRevealBack = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('globe-exit', { detail: { active: false } }));
+  }, []);
 
   const journeyNavActive = activeSection >= sections.length;
 
@@ -1468,6 +1492,17 @@ export default function Content({ lenisRef }) {
         />
       ))}
 
+      {/* ─── HISTORICAL EPOCHS WORD REVEAL ───
+          Announces the 12-landmark historical journey. Sits AFTER the five
+          globalization pillars and BEFORE the first destination (Colosseum), so
+          the Landmark Atlas only appears once the real destinations begin. */}
+      <RevealPanel
+        id="reveal-historical-epochs"
+        text="Historical Epochs"
+        onEnter={enterHistoricalReveal}
+        onEnterBack={enterHistoricalRevealBack}
+      />
+
       {destinations.map((destination, i) => {
         // Reduced-motion path: skip the state machine and render the title
         // statically inside each section (each section is viewport-tall, so
@@ -1505,9 +1540,10 @@ export default function Content({ lenisRef }) {
 
       {/* ─── POST-WTC ENDING ───
           One scroll past World Trade Center pulls the camera back to the full
-          globe; the next scroll reveals "Historical Epochs". These are plain
-          .panel-section panels so they join the snap list and the "block past
-          last panel" guard lands on the last one. */}
+          globe; the next scroll reveals "Modern World" while the real Earth
+          rushes upward off-screen. These are plain .panel-section panels so they
+          join the snap list and the "block past last panel" guard lands on the
+          last one. */}
       <RevealPanel
         id="globe-zoomout"
         overview
@@ -1516,9 +1552,10 @@ export default function Content({ lenisRef }) {
       />
 
       <RevealPanel
-        id="reveal-historical-epochs"
-        text="Historical Epochs"
-        onEnter={enterHistoricalReveal}
+        id="reveal-modern-world"
+        text="Modern World"
+        onEnter={enterModernReveal}
+        onLeaveBack={leaveModernRevealBack}
       />
 
       {/* ─── Normal-motion title overlay ───

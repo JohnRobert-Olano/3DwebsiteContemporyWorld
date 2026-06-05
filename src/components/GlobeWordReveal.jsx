@@ -6,11 +6,13 @@
 // the reveal, `reducedMotion` collapses it to a static fade.
 export default function GlobeWordReveal({ text, active, reducedMotion }) {
   const isHistorical = text === 'Historical Epochs';
+  const isModern = text === 'Modern World';
   const className = [
     'globe-word-reveal',
     active ? 'is-active' : '',
     reducedMotion ? 'is-reduced' : '',
     isHistorical ? 'globe-word-reveal--historical' : '',
+    isModern ? 'globe-word-reveal--modern' : '',
   ].filter(Boolean).join(' ');
 
   return (

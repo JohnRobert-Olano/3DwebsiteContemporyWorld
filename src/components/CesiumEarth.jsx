@@ -15,6 +15,9 @@ const EARTH_IDLE_CENTER = [12.4922, 22];
 const EARTH_OVERVIEW_ZOOM = 1.12;
 const EARTH_ROTATION_DEGREES_PER_SECOND = 0.82;
 const EARTH_MOTION_EASE = 0.0055;
+// Cap the ambient idle-rotation repaint to ~30fps (keeps the drift gentle while
+// halving the Cesium render cost during the reading sections).
+const IDLE_FRAME_MS = 33;
 
 // ── Landmark warm-up tuning ─────────────────────────────────────────────────
 // Behind the boot loader we teleport the camera to each of the 12 destination
@@ -22,7 +25,7 @@ const EARTH_MOTION_EASE = 0.0055;
 // transitions don't start from blank/gray meshes. Bounded so a slow or failed
 // view can never hang the boot.
 const WARMUP_PER_DEST_TIMEOUT_MS = 9000; // max wait for one view's full detail
-const WARMUP_SETTLE_MS = 350;            // fully-loaded must hold this long = settled
+const WARMUP_SETTLE_MS = 500;            // fully-loaded must hold this long = settled
 const WARMUP_MIN_WAIT_MS = 300;          // give traversal time to request tiles first
 const WARMUP_OVERALL_TIMEOUT_MS = 100000; // hard cap on the whole warm-up pass
 const WARMUP_SAMPLE_WAIT_CAP_MS = 8000;  // cap on awaiting ground-height sampling
@@ -252,6 +255,7 @@ function buildEarthIdleDriver() {
 export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgress } = {}) {
   const containerRef = useRef(null);
   const containerOuterRef = useRef(null);
+  const containerInnerRef = useRef(null);
   const viewerRef = useRef(null);
   const visualReadyNotifiedRef = useRef(false);
   const onWarmupProgressRef = useRef(onWarmupProgress);
@@ -321,6 +325,12 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.fog.enabled = false;
     viewer.scene.skyBox.show = false;
+    // Render on demand: Cesium only repaints when something actually changes
+    // (camera moves via setCameraPose -> requestRender, tiles stream, user
+    // input). This stops the heavy 3D-tiles GPU work during static landmark
+    // holds, reading pauses, and while the globe is hidden behind the archive /
+    // game modals - the single biggest runtime win for this scene.
+    viewer.scene.requestRenderMode = true;
     // Transparent clear colour: the dark page background (and any reveal title
     // layered behind the canvas) shows through the empty space around the globe.
     viewer.scene.backgroundColor = Cesium.Color.TRANSPARENT;
@@ -463,23 +473,13 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
         try { await Promise.race([samplePromise, delay(WARMUP_SAMPLE_WAIT_CAP_MS)]); } catch { /* ignore */ }
       }
 
-      // Force the highest target detail across each warmed view: no coarse-first
-      // pass, no foveated periphery delay, no distance SSE relaxation, load the
-      // desired LOD directly. Restored to the smooth progressive runtime config
-      // afterwards so the live experience still streams in nicely.
-      const ts = tileset;
-      const savedConfig = ts && {
-        foveatedScreenSpaceError: ts.foveatedScreenSpaceError,
-        dynamicScreenSpaceError: ts.dynamicScreenSpaceError,
-        immediatelyLoadDesiredLevelOfDetail: ts.immediatelyLoadDesiredLevelOfDetail,
-        baseScreenSpaceError: ts.baseScreenSpaceError,
-      };
-      if (ts) {
-        ts.foveatedScreenSpaceError = false;
-        ts.dynamicScreenSpaceError = false;
-        ts.immediatelyLoadDesiredLevelOfDetail = true;
-        ts.baseScreenSpaceError = ts.maximumScreenSpaceError;
-      }
+      // Warm with the LIVE runtime tileset config (do NOT override skip-LOD /
+      // base SSE / foveation): the live camera does a coarse skip-LOD first
+      // pass, so the cache must hold those coarse ancestor tiles AND the refined
+      // leaves. Forcing immediatelyLoadDesiredLevelOfDetail here would cache only
+      // the leaves, leaving the runtime to stream the coarse pass on arrival
+      // (the "black tiles with lines"). waitForTilesSettled waits for the view
+      // to fully refine before moving on.
 
       // Teleport to a view, then wait for its tiles to fully load.
       const warmPose = async (dest, zoom, pitch, bearing, altitude, label) => {
@@ -493,34 +493,25 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
         }
       };
 
-      try {
-        const overallDeadline = performance.now() + WARMUP_OVERALL_TIMEOUT_MS;
-        for (let i = 0; i < total; i += 1) {
-          if (cancelledTilesetLoad || !tileset) break;
-          if (performance.now() > overallDeadline) {
-            console.warn('[CesiumEarth] landmark warm-up hit the overall timeout; starting with a partial preload');
-            break;
-          }
-          const dest = destinations[i];
-          const camera = getDestinationCamera(dest);
-          const altitude = camera.altitude ?? codex.elevations.get(dest.id) ?? 100;
+      const overallDeadline = performance.now() + WARMUP_OVERALL_TIMEOUT_MS;
+      for (let i = 0; i < total; i += 1) {
+        if (cancelledTilesetLoad || !tileset) break;
+        if (performance.now() > overallDeadline) {
+          console.warn('[CesiumEarth] landmark warm-up hit the overall timeout; starting with a partial preload');
+          break;
+        }
+        const dest = destinations[i];
+        const camera = getDestinationCamera(dest);
+        const altitude = camera.altitude ?? codex.elevations.get(dest.id) ?? 100;
 
-          // (a) Mid-flight regional approach over the destination, then
-          // (b) the final landmark close-up. Both views the live transition
-          // passes through are loaded to full detail before the journey.
-          await warmPose(dest, WARMUP_APPROACH_ZOOM, WARMUP_APPROACH_PITCH, camera.bearing, altitude, 'approach');
-          if (cancelledTilesetLoad) break;
-          await warmPose(dest, camera.zoom, camera.pitch, camera.bearing, altitude, 'landing');
-          if (cancelledTilesetLoad) break;
-          onWarmupProgressRef.current?.(i + 1, total);
-        }
-      } finally {
-        if (ts && savedConfig) {
-          ts.foveatedScreenSpaceError = savedConfig.foveatedScreenSpaceError;
-          ts.dynamicScreenSpaceError = savedConfig.dynamicScreenSpaceError;
-          ts.immediatelyLoadDesiredLevelOfDetail = savedConfig.immediatelyLoadDesiredLevelOfDetail;
-          ts.baseScreenSpaceError = savedConfig.baseScreenSpaceError;
-        }
+        // (a) Mid-flight regional approach over the destination, then
+        // (b) the final landmark close-up. Both views the live transition
+        // passes through are fully refined before the journey.
+        await warmPose(dest, WARMUP_APPROACH_ZOOM, WARMUP_APPROACH_PITCH, camera.bearing, altitude, 'approach');
+        if (cancelledTilesetLoad) break;
+        await warmPose(dest, camera.zoom, camera.pitch, camera.bearing, altitude, 'landing');
+        if (cancelledTilesetLoad) break;
+        onWarmupProgressRef.current?.(i + 1, total);
       }
 
       // Restore the neutral Earth overview before handing off to the intro.
@@ -677,18 +668,20 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
     // ── RAF camera driver loop ─────────────────────────────────────────────
     const applyEarthIdleRotation = buildEarthIdleDriver();
     let frameId = 0;
-    let lastTime = performance.now();
+    let lastIdleTime = performance.now();
     const reducedMotion = prefersReducedMotion();
 
     const tick = (time) => {
-      const deltaSeconds = Math.min(0.05, (time - lastTime) / 1000);
-      lastTime = time;
       const viewerNow = viewerRef.current;
       if (!viewerNow || viewerNow.isDestroyed()) return;
 
       // The offscreen landmark warm-up owns the camera during boot - don't let
       // the idle/tour drivers move it while we visit each destination view.
-      if (codex.warmupActive) {
+      // Likewise, while the album archive / a game modal fully covers the globe
+      // (projectsFinaleActive), skip all camera work so render-on-demand can
+      // idle Cesium entirely - nothing is visible to update.
+      if (codex.warmupActive || window.projectsFinaleActive) {
+        lastIdleTime = time;
         frameId = requestAnimationFrame(tick);
         return;
       }
@@ -711,15 +704,38 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
         && !window.codexDestinationFlying
         && camHeight > 1_000_000; // ~zoom <= 5.2-ish; gate matches Mapbox EARTH_SCROLL_MOTION_MAX_ZOOM
       if (shouldAnimateEarth) {
-        applyEarthIdleRotation(viewerNow, time, deltaSeconds, codex);
+        // Throttle the ambient rotation to ~IDLE_FRAME_MS so it stays a gentle
+        // drift without forcing a 60fps Cesium repaint through the long reading
+        // sections. Advance by the real elapsed time so the speed is unchanged.
+        if (time - lastIdleTime >= IDLE_FRAME_MS) {
+          const idleDelta = Math.min(0.05, (time - lastIdleTime) / 1000);
+          lastIdleTime = time;
+          applyEarthIdleRotation(viewerNow, time, idleDelta, codex);
+        }
+      } else {
+        lastIdleTime = time;
       }
 
       frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
 
+    // ── Modern World Earth-exit ────────────────────────────────────────────
+    // Toggle the CSS class that rushes the whole Earth canvas upward + fades it.
+    // Driven by Content's `globe-exit` event when the post-WTC ending is entered
+    // / left. Reduced-motion downgrades this to a gentle opacity fade in CSS.
+    const handleGlobeExit = (event) => {
+      const inner = containerInnerRef.current;
+      if (!inner) return;
+      inner.classList.toggle('earth-exit-active', !!event.detail?.active);
+    };
+    window.addEventListener('globe-exit', handleGlobeExit);
+
     // ── Reset Globe ────────────────────────────────────────────────────────
     const handleResetGlobe = () => {
+      // Any reset (Home / back-scroll into the zoom-out) cancels the exit so the
+      // Earth returns cleanly into view.
+      containerInnerRef.current?.classList.remove('earth-exit-active');
       window.destinationTourActive = false;
       window.destinationTourState = { index: 0, progress: 0 };
       window.codexDestinationFlying = false;
@@ -773,6 +789,7 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
         codex.cancelActivePan = null;
       }
       window.removeEventListener('resetGlobe', handleResetGlobe);
+      window.removeEventListener('globe-exit', handleGlobeExit);
       canvas.removeEventListener('contextmenu', suppressContextMenu);
       canvas.removeEventListener('mousedown', startInteraction);
       window.removeEventListener('mouseup', endInteraction);
@@ -841,7 +858,10 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
   return (
     <>
       <div ref={containerOuterRef} className="fixed inset-0 z-0 will-change-transform" data-lenis-prevent>
-        <div className="absolute inset-0" data-lenis-prevent>
+        {/* earth-stage owns the cinematic post-WTC exit: `earth-exit-active`
+            translates the whole Earth canvas upward + fades it (CSS). The outer
+            container keeps the lateral-shift transform, so the two never fight. */}
+        <div ref={containerInnerRef} className="earth-stage absolute inset-0" data-lenis-prevent>
           <div ref={containerRef} className="h-full w-full" data-lenis-prevent />
         </div>
         {!tilesVisualReady && !initialSetupError && <EarthLoadingState label="" />}

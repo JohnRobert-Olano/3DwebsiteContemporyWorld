@@ -165,7 +165,7 @@ export const projects = [
   },
   {
     id: 'ai-global-healthcare',
-    title: 'Bridging the 4.5 Million Gap',
+    title: 'Bridging the 4.5 Billion Gap',
     role: 'Health Technology',
     year: 2026,
     image: '/album_covers/21.png',
