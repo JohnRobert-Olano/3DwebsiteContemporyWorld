@@ -10,6 +10,7 @@ export default function AlbumGameShell({ project, gameMeta, children }) {
             src={project.image}
             alt={`${project.title} album cover`}
             draggable={false}
+            decoding="async"
           />
         </div>
         <div className="album-game-identity-copy">

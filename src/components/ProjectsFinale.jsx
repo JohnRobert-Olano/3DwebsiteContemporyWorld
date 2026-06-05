@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { projects } from '../lib/data/projects';
+import { articleRegistry } from './articles/articleRegistry';
 import AlbumGameShell from './games/AlbumGameShell';
 import { gameRegistry } from './games/gameRegistry';
 
@@ -19,7 +20,15 @@ const ROT_Y_DEG = -16;
 const ROT_Z_DEG = 0;
 const STACK_ORIGIN_X = '54%';
 const STACK_ORIGIN_Y = '59%';
-const CARD_WIDTH = 'clamp(360px, 30vw, 540px)';
+const STACK_ORIGIN_X_RATIO = 0.54;
+const STACK_ORIGIN_Y_RATIO = 0.59;
+const STACK_PERSPECTIVE_X_RATIO = 0.54;
+const STACK_PERSPECTIVE_Y_RATIO = 0.52;
+const STACK_PERSPECTIVE_PX = 1800;
+const CARD_WIDTH_MIN_PX = 360;
+const CARD_WIDTH_VW = 30;
+const CARD_WIDTH_MAX_PX = 540;
+const CARD_WIDTH = `clamp(${CARD_WIDTH_MIN_PX}px, ${CARD_WIDTH_VW}vw, ${CARD_WIDTH_MAX_PX}px)`;
 const CARD_ASPECT = '1 / 1';
 const VISIBLE_RADIUS = 9;
 // Hover: nudge the active cover sideways inside the stack. Keep it in-plane
@@ -36,6 +45,8 @@ const HOVER_SCALE = 1;
 // genuinely endless and flicker-free.
 const RENDER_RADIUS = VISIBLE_RADIUS + 2;
 const MAX_TARGET_AHEAD = Math.max(2, RENDER_RADIUS - 3);
+const STACK_HIT_SLOP_MIN_PX = 52;
+const STACK_HIT_SLOP_MAX_PX = 96;
 
 function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -86,6 +97,43 @@ function applyStackTransform(el, d) {
   el.style.transform = `translate3d(${(-d * STEP_X_VW).toFixed(4)}vw, ${(-d * STEP_Y_VW).toFixed(4)}vw, ${(-d * STEP_Z_PX).toFixed(2)}px)`;
 }
 
+function buildStackHitMetrics(el) {
+  if (typeof window === 'undefined' || !el) return null;
+  const rect = el.getBoundingClientRect();
+  const cardWidth = clampNumber(
+    window.innerWidth * (CARD_WIDTH_VW / 100),
+    CARD_WIDTH_MIN_PX,
+    CARD_WIDTH_MAX_PX,
+  );
+
+  return {
+    rect,
+    cardWidth,
+    cardHeight: cardWidth,
+    originX: rect.left + rect.width * STACK_ORIGIN_X_RATIO,
+    originY: rect.top + rect.height * STACK_ORIGIN_Y_RATIO,
+    perspectiveX: rect.left + rect.width * STACK_PERSPECTIVE_X_RATIO,
+    perspectiveY: rect.top + rect.height * STACK_PERSPECTIVE_Y_RATIO,
+    stepX: window.innerWidth * (STEP_X_VW / 100),
+    stepY: window.innerWidth * (STEP_Y_VW / 100),
+  };
+}
+
+function getProjectedStackCard(metrics, offset, fractionalOffset) {
+  const sequenceOffset = offset - fractionalOffset;
+  const rawX = metrics.originX + sequenceOffset * metrics.stepX;
+  const rawY = metrics.originY + sequenceOffset * metrics.stepY;
+  const z = sequenceOffset * STEP_Z_PX;
+  const scale = STACK_PERSPECTIVE_PX / (STACK_PERSPECTIVE_PX - z);
+
+  return {
+    centerX: metrics.perspectiveX + (rawX - metrics.perspectiveX) * scale,
+    centerY: metrics.perspectiveY + (rawY - metrics.perspectiveY) * scale,
+    width: metrics.cardWidth * scale,
+    height: metrics.cardHeight * scale,
+  };
+}
+
 function ProjectCover({ project }) {
   const [failedImage, setFailedImage] = useState(null);
   const title = cleanText(project.title);
@@ -103,6 +151,7 @@ function ProjectCover({ project }) {
           alt=""
           onError={() => setFailedImage(project.image)}
           draggable={false}
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
           style={{
             opacity: 1,
@@ -159,8 +208,7 @@ function ProjectCover({ project }) {
   );
 }
 
-function StackCard({ project, offset, onOpen, reducedMotion }) {
-  const [isHovered, setIsHovered] = useState(false);
+function StackCard({ project, offset, isHovered, onOpen, onFocusOffset, onBlurOffset, reducedMotion }) {
   const distance = Math.abs(offset);
   const isActive = offset === 0;
   // Slots are keyed by offset, so opacity is constant per slot - the outer two
@@ -176,10 +224,8 @@ function StackCard({ project, offset, onOpen, reducedMotion }) {
     <button
       type="button"
       onClick={() => onOpen(project)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onFocus={() => setIsHovered(true)}
-      onBlur={() => setIsHovered(false)}
+      onFocus={() => onFocusOffset(offset)}
+      onBlur={() => onBlurOffset(offset)}
       aria-label={`Open ${cleanText(project.title)}`}
       aria-hidden={canInteract ? undefined : 'true'}
       tabIndex={canInteract ? undefined : -1}
@@ -195,7 +241,9 @@ function StackCard({ project, offset, onOpen, reducedMotion }) {
         zIndex: hoverActive ? 3000 : 1000 - offset,
         opacity,
         pointerEvents: canInteract ? 'auto' : 'none',
-        willChange: 'transform',
+        // Only promote the visible cards to GPU layers (not the faded outer
+        // rings) so the moving stack stays smooth without over-allocating layers.
+        willChange: canInteract ? 'transform' : 'auto',
         outlineColor: FOCUS_RING,
       }}
     >
@@ -203,8 +251,9 @@ function StackCard({ project, offset, onOpen, reducedMotion }) {
         className="absolute inset-0 block overflow-hidden rounded-[2px]"
         style={{
           border: `1px solid ${BORDER_CARD}`,
+          // Opaque background: a backdrop-filter here blurred nothing (nothing
+          // shows through) but cost a GPU blur layer per card - removed.
           background: 'rgba(15, 15, 15, 1)',
-          backdropFilter: 'blur(10px)',
           boxShadow: hoverActive || isActive ? SHADOW_ACTIVE : SHADOW_DEFAULT,
           filter: hoverActive || isActive ? 'brightness(1.03) saturate(1.05)' : 'brightness(1) saturate(1)',
           transform: hoverActive ? hoverTransform : 'translate3d(0, 0, 0) scale(1)',
@@ -212,7 +261,9 @@ function StackCard({ project, offset, onOpen, reducedMotion }) {
           transition: reducedMotion
             ? 'none'
             : 'transform 0.42s cubic-bezier(0.16, 1, 0.3, 1), filter 0.24s ease, box-shadow 0.24s ease',
-          willChange: 'transform',
+          // The inner pane only transforms on hover - no need to keep it
+          // promoted otherwise.
+          willChange: hoverActive ? 'transform' : 'auto',
         }}
       >
         <ProjectCover project={project} />
@@ -261,13 +312,17 @@ function FullscreenView({ project, onClose, reducedMotion }) {
   const blurb = cleanText(project.blurb);
   const gameMeta = gameRegistry[project.id];
   const GameComponent = gameMeta?.Component;
+  const articleMeta = articleRegistry[project.id];
+  const ArticleComponent = articleMeta?.Component;
   const isGameModal = Boolean(GameComponent);
+  const isArticleModal = Boolean(ArticleComponent);
+  const isLargeModal = isGameModal || isArticleModal;
 
   return (
     <motion.div
       key={project.id}
       className={`fixed inset-0 z-[80] flex items-center justify-center backdrop-blur-md ${
-        isGameModal ? 'px-1.5 py-1.5 sm:px-2 sm:py-2 lg:px-4 lg:py-4' : 'px-5 py-8 sm:px-6 sm:py-10'
+        isLargeModal ? 'px-1.5 py-1.5 sm:px-2 sm:py-2 lg:px-4 lg:py-4' : 'px-5 py-8 sm:px-6 sm:py-10'
       }`}
       style={{ background: 'rgba(26,25,23,0.72)' }}
       initial={{ opacity: 0 }}
@@ -281,14 +336,22 @@ function FullscreenView({ project, onClose, reducedMotion }) {
     >
       <motion.div
         className={`relative z-[81] flex w-full flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)] ${
-          isGameModal ? 'projects-game-modal' : 'max-h-full'
+          isGameModal ? 'projects-game-modal' : isArticleModal ? articleMeta.modalClassName : 'max-h-full'
         }`}
         style={{
-          height: isGameModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
-          maxHeight: isGameModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
-          maxWidth: gameMeta ? 'min(1480px, calc(100vw - clamp(0.5rem, 2vw, 2rem)))' : '64rem',
+          height: isLargeModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
+          maxHeight: isLargeModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
+          maxWidth: isArticleModal
+            ? 'min(1800px, calc(100vw - clamp(0.5rem, 2vw, 2rem)))'
+            : gameMeta
+              ? 'min(1480px, calc(100vw - clamp(0.5rem, 2vw, 2rem)))'
+              : '64rem',
           transformOrigin: 'center center',
-          background: gameMeta ? 'rgba(13, 13, 13, 0.98)' : 'rgba(18, 18, 18, 0.82)',
+          background: isArticleModal
+            ? 'rgba(8, 8, 8, 0.99)'
+            : gameMeta
+              ? 'rgba(13, 13, 13, 0.98)'
+              : 'rgba(18, 18, 18, 0.82)',
           backdropFilter: 'blur(24px)',
           border: `1px solid ${BORDER_CARD}`,
         }}
@@ -329,6 +392,8 @@ function FullscreenView({ project, onClose, reducedMotion }) {
           <AlbumGameShell project={project} gameMeta={gameMeta}>
             <GameComponent project={project} reducedMotion={reducedMotion} />
           </AlbumGameShell>
+        ) : ArticleComponent ? (
+          <ArticleComponent project={project} reducedMotion={reducedMotion} />
         ) : (
           <>
             <div className="relative aspect-square w-full overflow-hidden">
@@ -395,12 +460,19 @@ const STACK_LERP = 0.14; // smoothing toward the target sequence
 
 export default function ProjectsFinale() {
   const archiveRootRef = useRef(null);
+  const stackHitAreaRef = useRef(null);
   const stackRef = useRef(null);
   const seqRef = useRef(0); // continuous scroll position, in cards (unbounded)
   const targetSeqRef = useRef(0);
   const baseRef = useRef(0); // integer base React has committed (== `base` state)
   const requestedBaseRef = useRef(0); // last base we asked React to render
   const fullscreenRef = useRef(null);
+  const stackHitMetricsRef = useRef(null);
+  const pointerHoverOffsetRef = useRef(null);
+  const focusedOffsetRef = useRef(null);
+  const lastPointerRef = useRef(null);
+  const pointerHoverRafRef = useRef(null);
+  const syncPointerHoverRef = useRef(() => {});
 
   // `base` is the active integer index; content for slot `offset` is
   // projects[wrapIndex(base + offset)]. Driving content off committed state (not
@@ -411,15 +483,113 @@ export default function ProjectsFinale() {
   const [mode, setMode] = useState('OVERVIEW');
   const [reducedMotion, setReducedMotion] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [pointerHoverOffset, setPointerHoverOffset] = useState(null);
+  const [focusedOffset, setFocusedOffset] = useState(null);
   const [archiveActive, setArchiveActive] = useState(
     () => typeof window !== 'undefined' && window.projectsFinaleUnlocked === true,
   );
 
   const useStack = archiveActive && mode === 'OVERVIEW' && !reducedMotion && !isMobile;
+  const activeHoverOffset = focusedOffset ?? pointerHoverOffset;
 
   useEffect(() => {
     fullscreenRef.current = fullscreen;
   }, [fullscreen]);
+
+  const setPointerHoverOffsetValue = useCallback((offset) => {
+    pointerHoverOffsetRef.current = offset;
+    setPointerHoverOffset((current) => (current === offset ? current : offset));
+  }, []);
+
+  const setFocusedOffsetValue = useCallback((offset) => {
+    focusedOffsetRef.current = offset;
+    setFocusedOffset((current) => (current === offset ? current : offset));
+  }, []);
+
+  const refreshStackHitMetrics = useCallback(() => {
+    const metrics = buildStackHitMetrics(stackHitAreaRef.current);
+    stackHitMetricsRef.current = metrics;
+    return metrics;
+  }, []);
+
+  const resolveStackPointerHit = useCallback((clientX, clientY) => {
+    const metrics = stackHitMetricsRef.current ?? refreshStackHitMetrics();
+    if (!metrics) return null;
+
+    const fractionalOffset = seqRef.current - baseRef.current;
+    let bestHit = null;
+
+    for (let offset = -VISIBLE_RADIUS; offset <= VISIBLE_RADIUS; offset += 1) {
+      const projected = getProjectedStackCard(metrics, offset, fractionalOffset);
+      const distance = Math.abs(offset);
+      const hitSlop = clampNumber(
+        STACK_HIT_SLOP_MAX_PX - distance * 4,
+        STACK_HIT_SLOP_MIN_PX,
+        STACK_HIT_SLOP_MAX_PX,
+      );
+      const radiusX = projected.width / 2 + hitSlop;
+      const radiusY = projected.height / 2 + hitSlop;
+      const normalizedX = (clientX - projected.centerX) / radiusX;
+      const normalizedY = (clientY - projected.centerY) / radiusY;
+      const score = normalizedX * normalizedX + normalizedY * normalizedY;
+
+      if (score > 1) continue;
+      if (!bestHit || score < bestHit.score) {
+        bestHit = { offset, score };
+      }
+    }
+
+    return bestHit;
+  }, [refreshStackHitMetrics]);
+
+  useEffect(() => {
+    syncPointerHoverRef.current = (pointer) => {
+      if (!pointer || !useStack || fullscreenRef.current || focusedOffsetRef.current !== null) return;
+      const hit = resolveStackPointerHit(pointer.clientX, pointer.clientY);
+      setPointerHoverOffsetValue(hit?.offset ?? null);
+    };
+  }, [resolveStackPointerHit, setPointerHoverOffsetValue, useStack]);
+
+  const clearPointerHover = useCallback(() => {
+    lastPointerRef.current = null;
+    setPointerHoverOffsetValue(null);
+  }, [setPointerHoverOffsetValue]);
+
+  const handleStackPointerMove = useCallback((event) => {
+    if (!useStack || fullscreenRef.current || focusedOffsetRef.current !== null) return;
+    lastPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
+    if (pointerHoverRafRef.current !== null) return;
+
+    pointerHoverRafRef.current = window.requestAnimationFrame(() => {
+      pointerHoverRafRef.current = null;
+      syncPointerHoverRef.current(lastPointerRef.current);
+    });
+  }, [useStack]);
+
+  const handleStackPointerLeave = useCallback(() => {
+    clearPointerHover();
+  }, [clearPointerHover]);
+
+  const handleStackClickCapture = useCallback((event) => {
+    if (!useStack || fullscreenRef.current || event.detail === 0) return;
+    const hit = resolveStackPointerHit(event.clientX, event.clientY);
+    if (!hit) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    setFullscreen(projects[wrapIndex(baseRef.current + hit.offset)]);
+  }, [resolveStackPointerHit, useStack]);
+
+  const handleStackCardFocus = useCallback((offset) => {
+    setFocusedOffsetValue(offset);
+  }, [setFocusedOffsetValue]);
+
+  const handleStackCardBlur = useCallback((offset) => {
+    if (focusedOffsetRef.current === offset) {
+      setFocusedOffsetValue(null);
+      syncPointerHoverRef.current(lastPointerRef.current);
+    }
+  }, [setFocusedOffsetValue]);
 
   // ── Responsive / reduced-motion sync ──────────────────────────────────────
   useEffect(() => {
@@ -486,7 +656,13 @@ export default function ProjectsFinale() {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
-      if (fullscreenRef.current) setFullscreen(null);
+      if (fullscreenRef.current) {
+        if (typeof window.projectsArticleCloseConsole === 'function') {
+          window.projectsArticleCloseConsole();
+          return;
+        }
+        setFullscreen(null);
+      }
       else exitArchive();
     };
     window.addEventListener('keydown', onKey);
@@ -500,6 +676,38 @@ export default function ProjectsFinale() {
     return () => document.body.classList.remove('projects-finale-modal-open');
   }, [fullscreen]);
 
+  useLayoutEffect(() => {
+    if (!useStack) {
+      stackHitMetricsRef.current = null;
+      return;
+    }
+    refreshStackHitMetrics();
+  }, [base, refreshStackHitMetrics, useStack]);
+
+  useEffect(() => {
+    if (!useStack) return undefined;
+    const onResize = () => {
+      refreshStackHitMetrics();
+      syncPointerHoverRef.current(lastPointerRef.current);
+    };
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [refreshStackHitMetrics, useStack]);
+
+  useEffect(() => {
+    if (useStack && !fullscreen) return;
+    clearPointerHover();
+    setFocusedOffsetValue(null);
+  }, [clearPointerHover, fullscreen, setFocusedOffsetValue, useStack]);
+
+  useEffect(() => () => {
+    if (pointerHoverRafRef.current !== null) {
+      window.cancelAnimationFrame(pointerHoverRafRef.current);
+      pointerHoverRafRef.current = null;
+    }
+  }, []);
+
   // Keep the container transform on the SAME basis as the rendered content:
   // whenever `base` commits, re-apply the fractional transform before paint so
   // the content-shift and transform-shift land in one frame (no flicker).
@@ -508,6 +716,7 @@ export default function ProjectsFinale() {
     requestedBaseRef.current = base;
     const el = stackRef.current;
     if (el) applyStackTransform(el, seqRef.current - base);
+    syncPointerHoverRef.current(lastPointerRef.current);
   }, [base]);
 
   // ── Internal looping driver ───────────────────────────────────────────────
@@ -544,6 +753,7 @@ export default function ProjectsFinale() {
       // Transform uses the committed base so it always matches the rendered
       // covers; the layout effect re-syncs on the frame `base` actually changes.
       applyStackTransform(stackEl, seqRef.current - baseRef.current);
+      syncPointerHoverRef.current(lastPointerRef.current);
 
       const desiredBase = Math.round(seqRef.current);
       if (desiredBase !== requestedBaseRef.current) {
@@ -656,8 +866,12 @@ export default function ProjectsFinale() {
 
       {useStack && (
         <div
+          ref={stackHitAreaRef}
           className="absolute inset-0 z-10"
-          style={{ perspective: '1800px', perspectiveOrigin: '54% 52%' }}
+          onPointerMove={handleStackPointerMove}
+          onPointerLeave={handleStackPointerLeave}
+          onClickCapture={handleStackClickCapture}
+          style={{ perspective: `${STACK_PERSPECTIVE_PX}px`, perspectiveOrigin: '54% 52%' }}
         >
           <div
             ref={stackRef}
@@ -671,7 +885,10 @@ export default function ProjectsFinale() {
                   key={offset}
                   offset={offset}
                   project={projects[wrapIndex(base + offset)]}
+                  isHovered={activeHoverOffset === offset}
                   onOpen={setFullscreen}
+                  onFocusOffset={handleStackCardFocus}
+                  onBlurOffset={handleStackCardBlur}
                   reducedMotion={reducedMotion}
                 />
               );

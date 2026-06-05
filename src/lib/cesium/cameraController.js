@@ -57,6 +57,9 @@ export function setCameraPose(viewer, pose) {
   if (!viewer || viewer.isDestroyed?.()) return;
   viewer.camera.lookAt(targetFromPose(pose), hprFromPose(pose));
   viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  // With scene.requestRenderMode enabled, every camera move must explicitly
+  // request a frame; otherwise the moved camera wouldn't repaint.
+  viewer.scene.requestRender();
 }
 
 // Animated flight — used for landmark-to-landmark transitions. Uses

@@ -104,6 +104,12 @@ function App() {
     }, 600); // Wait for fade in
   };
 
+  const handleArticlesClick = (e) => {
+    e.preventDefault();
+    window.projectsFinaleUnlocked = true;
+    window.dispatchEvent(new Event('projectsFinaleUnlock'));
+  };
+
   return (
     <main className="relative min-h-[100dvh] w-full overflow-x-hidden bg-bg text-white font-sans">
       <AnimatePresence>
@@ -148,12 +154,13 @@ function App() {
           >
             World View
           </a>
-          <a
-            href="#culture"
-            className="px-1 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+          <button
+            type="button"
+            onClick={handleArticlesClick}
+            className="cursor-pointer bg-transparent px-1 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
-            Topics
-          </a>
+            Articles
+          </button>
         </div>
       </nav>
 
