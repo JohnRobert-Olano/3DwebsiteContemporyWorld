@@ -8167,6 +8167,7 @@ body.album-archive-active .earth-preload-label {
 
 .gex-avatar--girl .gex-avatar__hair {
   top: 15px;
+  z-index: 1;
   width: 78px;
   height: 58px;
   border-radius: 9999px 9999px 24px 24px;
@@ -8365,16 +8366,23 @@ body.album-archive-active .earth-preload-label {
   border-radius: 14px;
   background: #ffffff;
   color: #273043;
-  padding: 11px 12px;
-  font-size: 0.94rem;
+  padding: 8px 12px;
+  font-size: 0.88rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
+  height: 64px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   animation: gex-receipt-enter 240ms ease both;
 }
 
 .gex-receipt--latest {
   background: #e8f1ff;
   box-shadow: inset 5px 0 0 #1f6dff;
+  animation: gex-receipt-flash 1.2s cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 
 .gex-receipt--empty {
@@ -8405,10 +8413,6 @@ body.album-archive-active .earth-preload-label {
     align-items: start;
     grid-template-columns: minmax(0, 0.86fr) minmax(310px, 1.1fr) minmax(0, 0.86fr);
   }
-
-  .gex-trade-log {
-    grid-column: 2;
-  }
 }
 
 @keyframes gex-bar-pop {
@@ -8431,6 +8435,33 @@ body.album-archive-active .earth-preload-label {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes gex-receipt-flash {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    background-color: #fef08a;
+    color: #854d0e;
+    box-shadow: inset 5px 0 0 #eab308, 0 0 15px rgba(234, 179, 8, 0.5);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: #fef08a;
+    color: #854d0e;
+    box-shadow: inset 5px 0 0 #eab308, 0 0 15px rgba(234, 179, 8, 0.5);
+  }
+  40% {
+    background-color: #fef08a;
+    color: #854d0e;
+    box-shadow: inset 5px 0 0 #eab308, 0 0 15px rgba(234, 179, 8, 0.5);
+  }
+  100% {
+    background-color: #e8f1ff;
+    color: #273043;
+    box-shadow: inset 5px 0 0 #1f6dff;
   }
 }
 
@@ -9413,13 +9444,55 @@ body.album-archive-active .earth-preload-label {
 .gex-fit .gex-layout {
   min-height: 0;
   margin-top: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.gex-fit .gex-layout::-webkit-scrollbar {
+  display: none;
+}
+
+.gex-fit .gex-trade-desk {
+  min-height: 0;
+}
+
+.gex-fit .gex-trade-desk .gex-trade-log {
+  margin-top: 12px;
 }
 
 .gex-log-list {
   display: grid;
-  gap: 6px;
+  gap: 12px;
   margin-top: 8px;
+  height: 68px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  padding: 2px 8px 2px 2px;
+  box-sizing: border-box;
+}
+
+.gex-log-list::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.gex-log-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gex-log-list::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: #cbd5e1;
+}
+
+.gex-log-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.gex-receipt {
+  scroll-snap-align: start;
 }
 
 @media (min-width: 768px) {
@@ -9451,7 +9524,6 @@ body.album-archive-active .earth-preload-label {
 
   .gex-fit .gex-layout {
     align-items: stretch;
-    grid-template-rows: minmax(0, 1fr) auto;
   }
 
   .gex-fit .gex-panel {
@@ -9483,10 +9555,9 @@ body.album-archive-active .earth-preload-label {
     gap: 8px;
     grid-template-areas:
       "trader-one trader-two"
-      "desk desk"
-      "log log";
+      "desk desk";
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .gex-fit .gex-trader-panel:first-child {
@@ -9499,10 +9570,6 @@ body.album-archive-active .earth-preload-label {
 
   .gex-fit .gex-trader-panel:nth-of-type(3) {
     grid-area: trader-two;
-  }
-
-  .gex-fit .gex-trade-log {
-    grid-area: log;
   }
 
   .gex-fit .gex-panel {
@@ -9815,10 +9882,6 @@ body.album-archive-active .earth-preload-label {
 
   .gex-fit .gex-route-map {
     min-height: 54px;
-  }
-
-  .gex-receipt:nth-of-type(n + 3) {
-    display: none;
   }
 }
 

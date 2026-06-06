@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { TRADE_ITEMS, TRADE_NATIONALITIES, TRADE_NATIONALITY_POINTS } from '../../lib/games/constants';
 import { clamp, formatUSD } from '../../lib/games/helpers';
 import FlatWorldMap from './FlatWorldMap';
@@ -174,13 +174,21 @@ function TradeRouteMap({ seller, buyer, sellerPoint, buyerPoint }) {
 }
 
 function TradeLog({ entries }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [entries]);
+
   return (
     <section className="gex-panel gex-trade-log" aria-labelledby="gex-trade-log-title" aria-live="polite">
       <div className="gex-panel__kicker">Trade Log</div>
       <h5 id="gex-trade-log-title" className="gex-panel__title">
         Receipts
       </h5>
-      <div className="gex-log-list">
+      <div ref={containerRef} className="gex-log-list">
         {entries.length ? (
           entries.map((entry, index) => (
             <p key={entry.id} className={`gex-receipt ${index === 0 ? 'gex-receipt--latest' : ''}`}>
@@ -238,7 +246,7 @@ export default function GlobExGame() {
       }),
     );
     setLastTrade({ id: tradeId, sellerIndex, buyerIndex });
-    setTradeLog((current) => [{ id: tradeId, text: receipt }, ...current].slice(0, 5));
+    setTradeLog((current) => [{ id: tradeId, text: receipt }, ...current].slice(0, 20));
   };
 
   const resetExchange = () => {
@@ -344,6 +352,7 @@ export default function GlobExGame() {
               EXECUTE TRADE
             </button>
           </div>
+          <TradeLog entries={tradeLog} />
         </section>
 
         <TraderPanel
@@ -354,8 +363,6 @@ export default function GlobExGame() {
           activeMetric={activeProfit?.traderIndex === 1 ? activeProfit : activeAssets?.traderIndex === 1 ? activeAssets : null}
           onChange={(nextTrader) => updateTrader(1, nextTrader)}
         />
-
-        <TradeLog entries={tradeLog} />
       </div>
     </div>
   );
