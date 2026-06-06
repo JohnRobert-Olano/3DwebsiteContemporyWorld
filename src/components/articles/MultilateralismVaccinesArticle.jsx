@@ -345,12 +345,7 @@ export default function MultilateralismVaccinesArticle({ project, reducedMotion 
     if (tab === 'cost' && !reducedMotion) setCostReplayKey((key) => key + 1);
   };
 
-  const openSupportDrawer = (event) => {
-    focusReturnRef.current = event.currentTarget;
-    setActiveMilestone(null);
-    setSupportStatus('idle');
-    setActiveDrawer('support');
-  };
+
 
   const openTimelineDrawer = (event, milestone) => {
     focusReturnRef.current = event.currentTarget;
@@ -410,9 +405,6 @@ export default function MultilateralismVaccinesArticle({ project, reducedMotion 
         <nav className="multilateralism-vaccines-article__navbar" aria-label="The Alliance">
           <div className="multilateralism-vaccines-article__navbar-inner">
             <span className="multilateralism-vaccines-article__brand">{articleMeta.brand}</span>
-            <button className="multilateralism-vaccines-article__support-button" type="button" onClick={openSupportDrawer}>
-              Support
-            </button>
           </div>
         </nav>
 

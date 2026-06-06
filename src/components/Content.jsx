@@ -168,12 +168,110 @@ const TECHNOLOGY_SNAP_GUARD_MS = 2200;
 const TECHNOLOGY_GESTURE_QUIET_MS = 1200;
 
 function IntroHero() {
+  const [shouldAnimate, setShouldAnimate] = useState(() => !!window.codexIntroCompleted);
+
+  useEffect(() => {
+    const onIntroComplete = () => {
+      setShouldAnimate(true);
+    };
+    window.addEventListener('introComplete', onIntroComplete);
+    return () => {
+      window.removeEventListener('introComplete', onIntroComplete);
+    };
+  }, []);
+
+  const handleScrollDown = () => {
+    const nextPanel = document.getElementById('reveal-globalization');
+    if (nextPanel) {
+      const lenis = window.codexLenis;
+      if (lenis?.scrollTo) {
+        lenis.scrollTo(nextPanel, {
+          duration: 1.4,
+          easing: (t) => 1 - Math.pow(1 - t, 3),
+        });
+      } else {
+        nextPanel.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
   return (
     <section
-      className="relative min-h-[100dvh] w-full overflow-hidden"
-      aria-hidden="true"
+      id="intro-hero"
+      className="panel-section relative min-h-[100dvh] w-full overflow-hidden flex flex-col justify-between items-center py-20 px-6 text-center pointer-events-auto"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_66%_42%,rgba(242,109,91,0.09),transparent_32%),linear-gradient(90deg,rgba(5,7,14,0.26),rgba(5,7,14,0.05)_52%,rgba(5,7,14,0.34))]" />
+      <style>{`
+        @keyframes scrollMouse {
+          0% { transform: translateY(0); opacity: 1; }
+          50% { transform: translateY(8px); opacity: 0.3; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        .animate-scroll-mouse {
+          animation: scrollMouse 1.8s infinite ease-in-out;
+        }
+
+        @keyframes popUp {
+          0% { transform: scale(0.85) translateY(30px); opacity: 0; filter: blur(10px); }
+          100% { transform: scale(1) translateY(0); opacity: 1; filter: blur(0); }
+        }
+
+        @keyframes fadeIn {
+          0% { opacity: 0; transform: translateY(15px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-pop-up {
+          animation: popUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .animate-fade-in-delayed {
+          animation: fadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+        }
+
+        .animate-fade-in-delayed-more {
+          animation: fadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
+        }
+      `}</style>
+
+      {/* Decorative gradient background */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(242,109,91,0.08),transparent_40%),linear-gradient(180deg,rgba(5,7,14,0.1) 0%, rgba(5,7,14,0.8) 100%)]" />
+
+
+      {/* Center Hero Typography (Absolute Centered) */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center w-full max-w-5xl px-6">
+        <h1 
+          className={`font-display text-6xl sm:text-8xl md:text-9xl lg:text-[10rem] font-bold uppercase tracking-[0.25em] text-white drop-shadow-[0_4px_35px_rgba(0,0,0,0.75)] leading-none select-none ${
+            shouldAnimate ? 'animate-pop-up' : 'opacity-0'
+          }`}
+        >
+          WORLD<span className="text-primary">.</span>VIEW
+        </h1>
+        <p className={`mt-8 text-xs sm:text-sm md:text-base text-white/70 font-mono uppercase tracking-[0.25em] max-w-2xl leading-relaxed drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)] ${
+          shouldAnimate ? 'animate-fade-in-delayed' : 'opacity-0'
+        }`}>
+          Exploring the flows of Globalization, its Historical Epochs, and the Modern World
+        </p>
+      </div>
+
+      {/* Spacer to balance flex-col layout since center is absolute positioned */}
+      <div className="h-4" aria-hidden="true" />
+
+      {/* Bottom Interactive Scroll Indicator */}
+      <button
+        type="button"
+        onClick={handleScrollDown}
+        className={`z-20 cursor-pointer flex flex-col items-center gap-3 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-primary bg-transparent border-none p-2 mt-auto ${
+          shouldAnimate ? 'animate-fade-in-delayed-more' : 'opacity-0'
+        }`}
+        aria-label="Scroll to begin exploration"
+      >
+        <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.28em] text-white/50 group-hover:text-primary transition-colors duration-300">
+          Scroll to begin
+        </span>
+        <div className="w-6 h-10 rounded-full border border-white/20 group-hover:border-primary/50 flex justify-center p-1.5 transition-colors duration-300">
+          <div className="w-1 h-2 rounded-full bg-white/70 group-hover:bg-primary animate-scroll-mouse" />
+        </div>
+      </button>
     </section>
   );
 }
@@ -457,6 +555,13 @@ export default function Content({ lenisRef }) {
   const activeSectionRef = useRef(-1);
   const activeJourneyIndexRef = useRef(-1);
 
+  // One-way latch: once the Modern World panel enters for the first time this
+  // session, the CTA (button + credits) becomes permanently visible. It never
+  // hides again, so there is no exit animation and scrolling back/forward keeps
+  // the CTA on screen.
+  const [modernWorldSeen, setModernWorldSeen] = useState(false);
+  const [goFurtherDownSeen, setGoFurtherDownSeen] = useState(false);
+
   // ── Title state machine ──────────────────────────────────
   // The only title that should ever be rendering visibly. -1 = none on screen.
   const [visibleTitleIndex, setVisibleTitleIndex] = useState(-1);
@@ -696,6 +801,21 @@ export default function Content({ lenisRef }) {
         // active, don't let viewport geometry re-activate WTC and fight the
         // globe pull-back.
         if (window.codexEndingActive) return;
+
+        // If we have scrolled above the first destination (Colosseum),
+        // deactivate the tour and reset the globe.
+        const firstPanel = destinationPanels[0];
+        if (firstPanel) {
+          const rect = firstPanel.getBoundingClientRect();
+          if (rect.top > 8) {
+            if (window.destinationTourActive) {
+              clearLandmarkChrome();
+              window.dispatchEvent(new Event('resetGlobe'));
+            }
+            return;
+          }
+        }
+
         const viewportHeight = window.innerHeight;
         const activePanel = destinationPanels.reduce((best, panel, index) => {
           const rect = panel.getBoundingClientRect();
@@ -764,7 +884,7 @@ export default function Content({ lenisRef }) {
       activeSectionRef.current = -1;
       document.body.classList.remove('in-projects-finale');
     };
-  }, [activateJourneyIndex]);
+  }, [activateJourneyIndex, clearLandmarkChrome]);
 
   /* ── Drive the title-out animation when activeJourneyIndex changes ──
      If the user has scrolled (or clicked) to a new landmark while a title
@@ -1040,6 +1160,11 @@ export default function Content({ lenisRef }) {
           clearEndingChrome();
           return;
         }
+        if (panel?.id === 'go-further-down-panel') {
+          clearEndingChrome();
+          window.dispatchEvent(new CustomEvent('globe-exit', { detail: { active: true } }));
+          return;
+        }
         const raw = panel?.dataset?.destinationIndex;
         if (raw == null) return;
         const destinationIndex = Number(raw);
@@ -1065,7 +1190,7 @@ export default function Content({ lenisRef }) {
       const target = panels[targetIdx];
       if (!target) return false;
       const syncTargetPanel = () => activatePanelDestination(targetIdx);
-      const landingOnTechnology = targetIdx === sections.length - 1;
+      const landingOnTechnology = target?.id === 'technology';
 
       isSnapping = true;
       if (landingOnTechnology) {
@@ -1291,10 +1416,15 @@ export default function Content({ lenisRef }) {
     clearLandmarkChrome(-1, Boolean(options.ending));
   }, [clearLandmarkChrome]);
 
-  // Post-WTC zoom-out panel: end the tour and fly the camera from the last
-  // landmark back to the full Earth via CesiumEarth's existing resetGlobe. The
-  // ending flag stops the viewport sync from snapping the active landmark back
-  // to WTC mid-transition.
+  const handleOpenAlbum = useCallback(() => {
+    window.projectsFinaleUnlocked = true;
+    window.dispatchEvent(new Event('projectsFinaleUnlock'));
+  }, []);
+
+  // Post-WTC panel 1: "globe-center-spin"
+  // End the tour and fly the camera from the last landmark back to the full
+  // Earth via CesiumEarth's existing resetGlobe. The idle rotation then takes
+  // over so the globe spins naturally at the center of the viewport.
   const enterGlobeZoomOut = useCallback(() => {
     calmGlobeChrome({ ending: true });
     window.dispatchEvent(new Event('resetGlobe'));
@@ -1318,19 +1448,32 @@ export default function Content({ lenisRef }) {
     window.dispatchEvent(new Event('resetGlobe'));
   }, [calmGlobeChrome]);
 
-  // Modern World reveal: the post-WTC ending. The globe has already pulled back
-  // (globe-zoomout); here we mark the ending and fire the cinematic Earth-exit
-  // (the real Cesium canvas rushes upward + fades, with speed-line streaks).
-  const enterModernReveal = useCallback(() => {
+  // Post-WTC panel 2.5: "go-further-down-panel"
+  // This panel fires the cinematic Earth-exit (rushes upward + fades) and shows
+  // the "Go further down" prompt in a blank page.
+  const enterGoFurtherDown = useCallback(() => {
     calmGlobeChrome({ ending: true });
     window.dispatchEvent(new CustomEvent('globe-exit', { detail: { active: true } }));
+    setGoFurtherDownSeen(true);
   }, [calmGlobeChrome]);
 
-  // Scrolling back up out of Modern World: reverse the Earth-exit so the globe
-  // returns cleanly. Re-entering globe-zoomout re-runs enterGlobeZoomOut
-  // (resetGlobe), which restores the overview pose.
+  const leaveGoFurtherDownBack = useCallback(() => {
+    // scrolling back up
+  }, []);
+
+  // Post-WTC panel 3: "reveal-modern-world"
+  // The globe is gone. "Modern World" sweeps in left-to-right; the Album button
+  // and credits fade in below it. Once this fires, modernWorldSeen latches true
+  // so the CTA never hides again (no exit animation, stays permanently).
+  const enterModernReveal = useCallback(() => {
+    calmGlobeChrome({ ending: true });
+    setModernWorldSeen(true);
+  }, [calmGlobeChrome]);
+
+  // Scrolling back up out of Modern World: re-trigger the Earth-exit so the
+  // globe upward animation is restored on the previous panel.
   const leaveModernRevealBack = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('globe-exit', { detail: { active: false } }));
+    // nothing needed — globe-earth-exit's onEnterBack will re-fire the exit.
   }, []);
 
   const journeyNavActive = activeSection >= sections.length;
@@ -1538,12 +1681,23 @@ export default function Content({ lenisRef }) {
         );
       })}
 
-      {/* ─── POST-WTC ENDING ───
-          One scroll past World Trade Center pulls the camera back to the full
-          globe; the next scroll reveals "Modern World" while the real Earth
-          rushes upward off-screen. These are plain .panel-section panels so they
-          join the snap list and the "block past last panel" guard lands on the
-          last one. */}
+      {/* ─── POST-WTC ENDING ───────────────────────────────────────────────────
+          Three-beat cinematic sequence after the World Trade Center landmark:
+
+          Beat 1 — globe-center-spin: camera flies back to full-Earth overview,
+          idle rotation plays so the globe spins gently at the center.
+
+          Beat 2 — globe-earth-exit: the real Cesium canvas rushes upward and
+          fades with speed-line streaks. No text — pure cinematic departure.
+
+          Beat 3 — reveal-modern-world: the globe is gone. "Modern World" sweeps
+          in left-to-right; the Album button fades in below; the credits line
+          rests beneath the button.
+
+          These are plain .panel-section panels so they join the snap list and
+          the "block past last panel" guard lands on the last one. */}
+
+      {/* Beat 1: Earth centered + spinning */}
       <RevealPanel
         id="globe-zoomout"
         overview
@@ -1551,12 +1705,74 @@ export default function Content({ lenisRef }) {
         onLeaveBack={leaveGlobeZoomOutBack}
       />
 
+
+
+      {/* Beat 2.5: Go further down prompt (separate page) */}
+      <RevealPanel
+        id="go-further-down-panel"
+        onEnter={enterGoFurtherDown}
+        onLeaveBack={leaveGoFurtherDownBack}
+      >
+        {() => (
+          <div
+            className={`absolute inset-0 flex items-center justify-center pointer-events-none go-further-down-prompt ${
+              goFurtherDownSeen ? 'is-active' : ''
+            }`}
+          >
+            <div className="relative flex items-center justify-center px-16 py-8 select-none">
+              {/* Surrounding white stars */}
+              <span className="absolute left-0 text-[13px] md:text-[15px] text-white/50 animate-[pulse_2s_infinite]">✦</span>
+              <span className="absolute right-0 text-[13px] md:text-[15px] text-white/50 animate-[pulse_2s_infinite_0.5s]">✦</span>
+              <span className="absolute top-0 text-[13px] md:text-[15px] text-white/50 animate-[pulse_2s_infinite_1s]">✦</span>
+              <span className="absolute bottom-0 text-[13px] md:text-[15px] text-white/50 animate-[pulse_2s_infinite_1.5s]">✦</span>
+              
+              <p className="font-mono text-[14px] md:text-[16px] uppercase tracking-[0.32em] text-white/80">
+                Go further down
+              </p>
+            </div>
+          </div>
+        )}
+      </RevealPanel>
+
+      {/* Beat 3: Modern World text + Album CTA + credits */}
       <RevealPanel
         id="reveal-modern-world"
-        text="Modern World"
         onEnter={enterModernReveal}
         onLeaveBack={leaveModernRevealBack}
-      />
+      >
+        {(active) => (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-auto gap-16 md:gap-24 px-4 select-none">
+            {/* The "Modern World" title text, rendered inline as a scrollable element */}
+            <h1
+              className={`modern-world-final-title ${
+                modernWorldSeen ? 'is-active' : ''
+              }`}
+            >
+              Modern World
+            </h1>
+
+            {/* Album CTA + credits */}
+            <div
+              className={`flex flex-col items-center gap-5 ${
+                modernWorldSeen ? 'modern-world-cta-active' : 'modern-world-cta-hidden'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={handleOpenAlbum}
+                className="group cursor-pointer rounded-full border border-white/[0.18] bg-bg/[0.72] px-8 py-4 font-mono text-[11px] uppercase tracking-[0.28em] text-white shadow-2xl backdrop-blur-2xl transition-all duration-300 hover:border-primary/60 hover:bg-primary/[0.15] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+              >
+                Explore the Album
+              </button>
+
+              {/* Credits line */}
+              <p className="modern-world-credits">
+                OSIT - OLAÑO - PADILLA Z - PADILLA R - PACIENTE - PAGARIGAN - SANGUIR // 2026
+              </p>
+            </div>
+          </div>
+        )}
+      </RevealPanel>
 
       {/* ─── Normal-motion title overlay ───
           One LandmarkTitleCard at viewport-overlay scope, driven by the
@@ -1579,9 +1795,6 @@ export default function Content({ lenisRef }) {
           Owns its own pinned ScrollTrigger; the snap bypass at the top of
           snapToPanel lets wheel input feed the scrub while pinned. */}
       <ProjectsFinale />
-
-      {/* ─── FOOTER SPACER ─── */}
-      <div className="footer-spacer h-[60vh]" aria-hidden="true" />
     </div>
   );
 }

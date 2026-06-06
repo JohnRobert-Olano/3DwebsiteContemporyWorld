@@ -3,14 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const heroImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAdVrMt557Bxuz7TQHQpFzjuQYKs8KF2AS0u9E-wQtB41AgZZhBOr9yBGa-oPF6_sNqZoNJzlurnbUaPHs-SzbwvnoNjLo0hbcmTuDK378wC3FZp4tEGiR8hk7I8fEMQ1kU4gc_xpBnEmEUZ-Y7Pn7mkOIkI2jxKTeE8i6mG_8-1qtqCELT9xwH_Hd-2Ma8Q1gNvTJSQ0x2Eb_aD7FYvceB80396kYamQnRZ6NP9WUvly3WOKXkJm0a28zdpcc_M4y6YhZNDEj2v3Q';
 
-const warRoomImage =
-  'https://lh3.googleusercontent.com/aida/ADBb0uiCDr5Qkum6x5arDGDAUA_8VRlSwyUoBFUwADDRdpLLO1FUD2glJO2eOmP61ym7gBGfjhtasKmAIsDHpIhweradYOlr5Q0rkhbSPl9Lm1JmKO3v4Sn_2Xbk7oWs9MyYBpDSyMtGVJayrXI-Za-VcABEdLIEI7fD9-CxYgBJdptoHDmlk-yoJ7ppJT3WVI8g8-xKh64-6E2RbOBQ_3EGSTvv8r93TiMniH3v_gw5APBb-7qcxIpAAIqFn_E';
+const warRoomImage = '/article_assets/armed-conflict/war-room.png';
 
-const towerImage =
-  'https://lh3.googleusercontent.com/aida/ADBb0uheTs0LVbiNLFCewy1am9DR44WnosfgwROOY7yCvIzW4FvTvH9oVc-ViZvLphJ5P9zTK6WHFx0qPXZ8QzUVG3evU0s0D_SPInjZ2wOATEIdoqZAjsgOH_B8iOXfFTCB0-IMqNtFJiLfxtE-DGxmXrSgvKU67dYzVQFql3DvE41ivL-DxLFd3BfcpjHnGWrB2S6KePlK3hBpqAq45GGpEcKWwe33A56brTOzfDq558brhqSw3dIxCkDma98';
+const towerImage = '/article_assets/armed-conflict/tower.png';
 
-const interstitialImage =
-  'https://lh3.googleusercontent.com/aida/ADBb0ugsMD_DtIh8F3hfIdFjjGjN-Gi4mf--t0mD1GsHzcC98MIezkTdeW9hC0j46cAGd28uMH0by150ZbWjrca2NSyXuk651etSTjjv9-2CulaTwDNhlqe14xj2emzWq3AJbf3MGmQJwvRhpugv-BgZRQMUxBYTvbD9YFImnzD9F2e5hejiXWOomJLjArs576J7GNN6jTlk5OhQaoiybEMX5Z-hDG6fU-hSgNy29wrmbR3C0R20zmhG5F8eDDU';
+const interstitialImage = '/article_assets/armed-conflict/battlefield.png';
 
 const navItems = [
   ['prelude', 'Prelude'],

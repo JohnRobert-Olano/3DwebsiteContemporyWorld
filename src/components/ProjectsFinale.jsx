@@ -336,7 +336,7 @@ function FullscreenView({ project, onClose, reducedMotion }) {
     >
       <motion.div
         className={`relative z-[81] flex w-full flex-col overflow-hidden rounded-[6px] shadow-[0_40px_120px_rgba(0,0,0,0.3)] ${
-          isGameModal ? 'projects-game-modal' : isArticleModal ? articleMeta.modalClassName : 'max-h-full'
+          isGameModal ? `projects-game-modal projects-game-${project.id}-modal` : isArticleModal ? articleMeta.modalClassName : 'max-h-full'
         }`}
         style={{
           height: isLargeModal ? 'calc(100dvh - clamp(0.75rem, 2vw, 2rem))' : undefined,
@@ -379,10 +379,10 @@ function FullscreenView({ project, onClose, reducedMotion }) {
           aria-label="Close project"
           className="absolute right-4 top-4 z-10 cursor-pointer rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] outline-none transition-colors hover:bg-white hover:text-bg focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
-            border: `1px solid ${BORDER_CARD}`,
-            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.22)',
+            background: 'rgba(55, 55, 55, 0.92)',
             backdropFilter: 'blur(4px)',
-            color: 'rgba(255, 255, 255, 0.8)',
+            color: 'rgba(255, 255, 255, 0.92)',
             outlineColor: FOCUS_RING,
           }}
         >
@@ -832,7 +832,7 @@ export default function ProjectsFinale() {
             style={{ background: TEXT_MUTED }}
             aria-hidden="true"
           />
-          Article archive
+          Album of the modern world
         </p>
         <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em]" style={{ color: TEXT_MUTED }}>
           {PROJECT_COUNT} visual essays

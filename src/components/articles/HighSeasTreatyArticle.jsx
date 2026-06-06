@@ -121,21 +121,7 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function SearchIcon() {
-  return (
-    <svg className="high-seas-treaty-article__icon" viewBox="0 0 24 24" aria-hidden="true" fill="none">
-      <path d="m16.2 16.2 4.3 4.3M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" stroke="currentColor" strokeLinecap="square" strokeWidth="2" />
-    </svg>
-  );
-}
 
-function CloseIcon() {
-  return (
-    <svg className="high-seas-treaty-article__icon" viewBox="0 0 20 20" aria-hidden="true" fill="none">
-      <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" strokeLinecap="square" strokeWidth="2" />
-    </svg>
-  );
-}
 
 function ChevronDownIcon() {
   return (
@@ -172,34 +158,10 @@ export default function HighSeasTreatyArticle({ project, reducedMotion = false }
   const scrollRef = useRef(null);
   const overviewRef = useRef(null);
   const progressFrameRef = useRef(0);
-  const focusReturnRef = useRef(null);
-  const focusTimerRef = useRef(0);
-  const searchInputRef = useRef(null);
-  const actionInputRef = useRef(null);
 
   const [progress, setProgress] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
-  const [activeOverlay, setActiveOverlay] = useState(null);
   const [visibleMilestones, setVisibleMilestones] = useState([]);
-  const [actionEmail, setActionEmail] = useState('');
-  const [actionConsent, setActionConsent] = useState(false);
-  const [actionStatus, setActionStatus] = useState('idle');
-
-  const closeOverlay = useCallback(() => {
-    setActiveOverlay(null);
-
-    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
-    focusTimerRef.current = window.setTimeout(() => {
-      focusReturnRef.current?.focus();
-      focusReturnRef.current = null;
-    }, 0);
-  }, []);
-
-  const openOverlay = useCallback((overlay, event) => {
-    focusReturnRef.current = event?.currentTarget ?? null;
-    setActionStatus('idle');
-    setActiveOverlay(overlay);
-  }, []);
 
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -298,33 +260,8 @@ export default function HighSeasTreatyArticle({ project, reducedMotion = false }
     return () => observer.disconnect();
   }, [reducedMotion]);
 
-  useEffect(() => {
-    if (!activeOverlay) return undefined;
-
-    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
-    focusTimerRef.current = window.setTimeout(() => {
-      if (activeOverlay === 'search') searchInputRef.current?.focus();
-      if (activeOverlay === 'action') actionInputRef.current?.focus();
-    }, 0);
-
-    const handleKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      closeOverlay();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [activeOverlay, closeOverlay]);
-
   useEffect(
     () => () => {
-      if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
       if (progressFrameRef.current) cancelAnimationFrame(progressFrameRef.current);
     },
     [],
@@ -348,10 +285,7 @@ export default function HighSeasTreatyArticle({ project, reducedMotion = false }
     });
   }, [reducedMotion]);
 
-  const handleActionSubmit = useCallback((event) => {
-    event.preventDefault();
-    setActionStatus('confirmed');
-  }, []);
+
 
   const visibleMilestoneSet = useMemo(
     () => new Set(reducedMotion ? timelineMilestones.map((milestone) => milestone.id) : visibleMilestones),
@@ -377,23 +311,6 @@ export default function HighSeasTreatyArticle({ project, reducedMotion = false }
         <nav className={`high-seas-treaty-article__navbar${navScrolled ? ' is-scrolled' : ''}`} aria-label="EcoLex article navigation">
           <div className="high-seas-treaty-article__nav-container">
             <span className="high-seas-treaty-article__logo">{articleMeta.brand}</span>
-            <div className="high-seas-treaty-article__nav-actions">
-              <button
-                type="button"
-                className="high-seas-treaty-article__icon-button"
-                aria-label="Search EcoLex archive"
-                onClick={(event) => openOverlay('search', event)}
-              >
-                <SearchIcon />
-              </button>
-              <button
-                type="button"
-                className="high-seas-treaty-article__cta"
-                onClick={(event) => openOverlay('action', event)}
-              >
-                Take Action
-              </button>
-            </div>
           </div>
         </nav>
 
@@ -549,94 +466,6 @@ export default function HighSeasTreatyArticle({ project, reducedMotion = false }
           </section>
         </main>
       </div>
-
-      {activeOverlay === 'search' ? (
-        <div
-          className="high-seas-treaty-article__overlay is-open"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Search EcoLex archive"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) closeOverlay();
-          }}
-        >
-          <div className="high-seas-treaty-article__search-panel">
-            <div className="high-seas-treaty-article__search-box">
-              <SearchIcon />
-              <input ref={searchInputRef} type="search" placeholder="Search EcoLex archive..." aria-label="Search EcoLex archive" />
-              <button type="button" className="high-seas-treaty-article__icon-button" aria-label="Close search" onClick={closeOverlay}>
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="high-seas-treaty-article__suggestions" aria-label="Trending search topics">
-              <span>Trending:</span>
-              {['#BBNJ', '#OceanGovernance', '#MarineProtectedAreas'].map((tag) => (
-                <button type="button" key={tag}>
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {activeOverlay === 'action' ? (
-        <div
-          className="high-seas-treaty-article__overlay is-open"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="high-seas-action-title"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) closeOverlay();
-          }}
-        >
-          <div className="high-seas-treaty-article__action-panel">
-            <button type="button" className="high-seas-treaty-article__modal-close" aria-label="Close take action modal" onClick={closeOverlay}>
-              <CloseIcon />
-            </button>
-            <div className="high-seas-treaty-article__action-header">
-              <span className="high-seas-treaty-article__action-symbol" aria-hidden="true">
-                30
-              </span>
-              <h2 id="high-seas-action-title">Join the Lifeline</h2>
-            </div>
-            <p>
-              Help advocate for rapid High Seas Treaty implementation. This mock form is local only and does not submit data,
-              process petitions, or connect to any backend.
-            </p>
-            <form className="high-seas-treaty-article__action-form" onSubmit={handleActionSubmit}>
-              <label htmlFor="high-seas-action-email">Email Address</label>
-              <input
-                ref={actionInputRef}
-                id="high-seas-action-email"
-                type="email"
-                required
-                value={actionEmail}
-                onChange={(event) => setActionEmail(event.target.value)}
-                placeholder="name@domain.com"
-              />
-              <label className="high-seas-treaty-article__checkbox" htmlFor="high-seas-action-consent">
-                <input
-                  id="high-seas-action-consent"
-                  type="checkbox"
-                  required
-                  checked={actionConsent}
-                  onChange={(event) => setActionConsent(event.target.checked)}
-                />
-                <span>I agree to receive ocean advocacy updates and alerts in this mock interaction.</span>
-              </label>
-              <button type="submit" className="high-seas-treaty-article__submit">
-                {actionStatus === 'confirmed' ? 'Signed Locally' : 'Sign the Petition'}
-              </button>
-              {actionStatus === 'confirmed' ? (
-                <p className="high-seas-treaty-article__confirmation" role="status">
-                  Thank you. This local confirmation illustrates the source interaction without sending any data.
-                </p>
-              ) : null}
-            </form>
-          </div>
-        </div>
-      ) : null}
     </article>
   );
 }

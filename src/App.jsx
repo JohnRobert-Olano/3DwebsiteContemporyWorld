@@ -16,8 +16,8 @@ function App() {
   const [introActive, setIntroActive] = useState(false);
   const [earthReady, setEarthReady] = useState(false);
   const [earthError, setEarthError] = useState(false);
-  // Landmark warm-up progress shown on the boot loader ({ done, total }).
-  const [warmup, setWarmup] = useState(null);
+  // -1 = not started, 0-11 = landmark currently being warmed up, 12 = complete.
+  const [warmupIndex, setWarmupIndex] = useState(-1);
   const lenisRef = useRef(null);
 
   // The boot loading screen owns the first-render gate until Cesium confirms the
@@ -58,12 +58,18 @@ function App() {
 
   const handleIntroComplete = () => {
     setIntroActive(false);
+    window.codexIntroCompleted = true;
     if (lenisRef.current) lenisRef.current.start();
+    window.dispatchEvent(new Event('introComplete'));
   };
 
   const handleEarthReady = useCallback(() => setEarthReady(true), []);
 
-  const handleWarmupProgress = useCallback((done, total) => setWarmup({ done, total }), []);
+  const handleWarmupProgress = useCallback((index) => {
+    setWarmupIndex(index);
+  }, []);
+
+
 
   const handleEarthError = useCallback(() => {
     setEarthError(true);
@@ -84,11 +90,12 @@ function App() {
     
     // Perform reset actions behind the loading screen
     setTimeout(() => {
-      // Jump to top instantly behind the loading screen using Lenis
+      // Jump to top instantly behind the loading screen.
+      // force:true bypasses the isStopped guard so scrollTo works even
+      // while Lenis is paused. Native scrollTo is the fallback.
+      window.scrollTo(0, 0);
       if (lenisRef.current) {
-        lenisRef.current.scrollTo(0, { immediate: true });
-      } else {
-        window.scrollTo(0, 0);
+        lenisRef.current.scrollTo(0, { immediate: true, force: true });
       }
       window.dispatchEvent(new Event('resetGlobe'));
       
@@ -104,7 +111,7 @@ function App() {
     }, 600); // Wait for fade in
   };
 
-  const handleArticlesClick = (e) => {
+  const handleAlbumClick = (e) => {
     e.preventDefault();
     window.projectsFinaleUnlocked = true;
     window.dispatchEvent(new Event('projectsFinaleUnlock'));
@@ -121,7 +128,7 @@ function App() {
       {/* Boot loading gate — owns the first render until the Earth is visually
           ready, then fades out and hands off to the World View intro. */}
       <AnimatePresence onExitComplete={handleBootGateExit}>
-        {booting && <LoadingScreen key="boot" warmup={warmup} />}
+        {booting && <LoadingScreen key="boot" warmupIndex={warmupIndex} />}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -156,10 +163,10 @@ function App() {
           </a>
           <button
             type="button"
-            onClick={handleArticlesClick}
+            onClick={handleAlbumClick}
             className="cursor-pointer bg-transparent px-1 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
-            Articles
+            Album
           </button>
         </div>
       </nav>

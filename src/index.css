@@ -658,6 +658,28 @@ body.album-archive-active .earth-preload-label {
   filter: blur(0);
 }
 
+/* ── Outline overlay variant (OLANO / Spider-Man dual-layer technique) ────────
+   This modifier is applied to a SECOND copy of GlobeWordReveal that renders
+   ABOVE the Cesium canvas at z-[5]. The fill is transparent so only the stroke
+   is visible — wherever the Earth disc covers the solid text behind it, the
+   stroke outline peeks through on top, creating the illusion the globe sits
+   between two text layers.
+   The mix-blend-mode keeps the white stroke legible against the photorealistic
+   Earth tiles without the shadow halo bleeding over the globe surface. */
+.globe-word-reveal--outline .globe-word-reveal__text {
+  /* Stroke-only: hide the fill, reveal only the letter outline. */
+  color: transparent;
+  -webkit-text-stroke: 2px rgb(255 255 255 / 90%);
+  text-stroke: 2px rgb(255 255 255 / 90%);
+  /* Remove the coloured shadow — it would bleed through the transparent fill
+     and create a coloured halo over the globe surface. */
+  text-shadow: none;
+  /* Screen blend: the white stroke brightens what's beneath it on the Earth
+     tiles rather than adding an opaque layer. Has no effect on the black
+     background where the solid fill layer already reads. */
+  mix-blend-mode: screen;
+}
+
 @media (max-width: 640px) {
   .globe-word-reveal--historical .globe-word-reveal__text {
     max-width: 92vw;
@@ -687,6 +709,26 @@ body.album-archive-active .earth-preload-label {
   font-size: clamp(3rem, 12.5vw, 15rem);
   line-height: 0.9;
   text-wrap: balance;
+}
+
+/* ── Globalization reveal: cinematic OLANO-style text-behind-globe ──────────
+   "Globalization" is rendered at a font-size large enough that the word
+   dramatically overflows on both sides of the Earth disc — the left and right
+   edges of the word peek around the globe just like the OLANO text peeks around
+   the Spider-Man figure in the reference. Removing max-width and forcing
+   nowrap keeps it on a single line so the overflow is guaranteed.
+   overflow: visible on the container is safe here because GlobeBackdrop is
+   fixed inset-0 — visible overflow won't reach the document and cause scrollbars. */
+.globe-word-reveal--globalization {
+  overflow: visible;
+}
+
+.globe-word-reveal--globalization .globe-word-reveal__text {
+  max-width: none;
+  white-space: nowrap;
+  font-size: clamp(4rem, 18vw, 22rem);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
 }
 
 /* Earth canvas stage (CesiumEarth inner wrapper). The resting state owns the
@@ -770,6 +812,121 @@ body.album-archive-active .earth-preload-label {
 
   .globe-exit-streak {
     animation: none;
+  }
+}
+
+/* Go further down prompt: fades in and rises up slowly after the Earth has cleared the screen. */
+.go-further-down-prompt {
+  opacity: 0;
+  transform: translateY(30px);
+  transition:
+    opacity 2000ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 2000ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.go-further-down-prompt.is-active {
+  opacity: 1;
+  transform: translateY(0);
+  /* Triggers once the Earth exit animation (2100ms) has fully completed and cleared the screen */
+  transition-delay: 2200ms;
+}
+
+/* ── Modern World ending: left-to-right text reveal + CTA + credits ─────────
+   Beat 3 of the post-WTC cinematic sequence. The "Modern World" backdrop text
+   (rendered by GlobeWordReveal behind the transparent canvas) sweeps in via a
+   left-to-right clip-path animation. The CTA button and credits line fade up
+   with a delayed stagger so they appear after the text has fully swept across. */
+
+/* Left-to-right clip sweep: overrides the default depth-zoom entrance.
+   clip-path grows from inset(0 100% 0 0) → inset(0 0% 0 0),
+   making the text appear to be drawn from left to right. */
+.modern-world-final-title {
+  margin: 0;
+  max-width: 90vw;
+  font-family: var(--font-display, 'Inter', sans-serif);
+  font-weight: 800;
+  font-size: clamp(3rem, 12.5vw, 15rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: rgb(232 240 255 / 92%);
+  text-wrap: balance;
+  /* Dimensional depth: layered drop shadows + faint stroke + cool rim glow. */
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 18%),
+    0 2px 2px rgb(0 0 0 / 45%),
+    0 8px 22px rgb(0 0 0 / 60%),
+    0 26px 60px rgb(2 8 22 / 70%),
+    0 0 70px rgb(96 165 250 / 22%);
+  -webkit-text-stroke: 1px rgb(150 190 255 / 18%);
+  
+  clip-path: inset(0 100% 0 0);
+  opacity: 1;
+  transition: clip-path 1400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modern-world-final-title.is-active {
+  clip-path: inset(0 0% 0 0);
+}
+
+/* CTA wrapper: hidden → active states.
+   `left-1/2` requires translateX(-50%) for centering. The top offset is set
+   directly via inline style (calc(50% + text-half-height + gap)).
+
+   hidden: no transition — once the one-way latch fires we never go back to
+   hidden, so we don't want a reversal animation at all.
+
+   active: fades up 500ms after the panel enters so it arrives while the
+   left-to-right text sweep is still finishing (text sweep = 1400ms). */
+.modern-world-cta-hidden {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: none;
+}
+
+.modern-world-cta-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 900ms cubic-bezier(0.16, 1, 0.3, 1) 500ms,
+    transform 900ms cubic-bezier(0.16, 1, 0.3, 1) 500ms;
+}
+
+/* Credits line beneath the album button */
+.modern-world-credits {
+  margin: 0;
+  font-family: var(--font-mono, 'Courier New', monospace);
+  font-size: clamp(9px, 1.1vw, 12px);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 42%);
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .modern-world-credits {
+    white-space: normal;
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    max-width: 82vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modern-world-final-title {
+    clip-path: none;
+    transition: opacity 400ms ease;
+  }
+
+  .modern-world-cta-hidden {
+    transition: none;
+  }
+
+  .modern-world-cta-active {
+    transition: opacity 300ms ease 200ms;
+    transform: none;
   }
 }
 
@@ -6148,7 +6305,7 @@ body.album-archive-active .earth-preload-label {
 }
 
 .global-debt-article__modal h2 {
-  max-width: calc(100% - 3rem);
+  max-width: calc(100% - 9rem);
   color: var(--gda-primary);
   font-size: 2.55rem;
 }
@@ -6474,17 +6631,17 @@ body.album-archive-active .earth-preload-label {
 
 .new-silk-road-digital-article-modal > button[aria-label="Close project"] {
   z-index: 30;
-  border-color: rgb(141 75 0 / 22%);
-  background: rgb(255 252 248 / 92%);
-  color: #3a2416;
+  border-color: rgb(141 75 0 / 22%) !important;
+  background: rgb(255 252 248 / 92%) !important;
+  color: #3a2416 !important;
   box-shadow: 0 10px 28px rgb(51 31 11 / 4%);
 }
 
 .new-silk-road-digital-article-modal > button[aria-label="Close project"]:hover,
 .new-silk-road-digital-article-modal > button[aria-label="Close project"]:focus-visible {
-  border-color: rgb(141 75 0 / 42%);
-  background: #fff;
-  color: #8d4b00;
+  border-color: rgb(141 75 0 / 42%) !important;
+  background: #fff !important;
+  color: #8d4b00 !important;
 }
 
 .new-silk-road-digital-article {
@@ -9211,8 +9368,25 @@ body.album-archive-active .earth-preload-label {
 
 .ripple-fit-result-card {
   max-height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
   padding: clamp(10px, 1.2vw, 14px);
+}
+
+.ripple-fit-result-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ripple-fit-result-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ripple-fit-result-card::-webkit-scrollbar-thumb {
+  background: #96c2df;
+  border-radius: 3px;
+}
+
+.ripple-fit-result-card::-webkit-scrollbar-thumb:hover {
+  background: #5c97be;
 }
 
 .ripple-fit-region-list {
@@ -9767,9 +9941,9 @@ body.album-archive-active .earth-preload-label {
 
 .remote-work-article-modal > button[aria-label="Close project"] {
   z-index: 80;
-  border: 1px solid rgb(194 198 216 / 52%);
-  background: rgb(255 255 255 / 86%);
-  color: #1c1b1b;
+  border: 1px solid rgb(194 198 216 / 52%) !important;
+  background: rgb(255 255 255 / 86%) !important;
+  color: #1c1b1b !important;
   box-shadow: 0 10px 30px rgb(0 79 192 / 10%);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -9777,9 +9951,9 @@ body.album-archive-active .earth-preload-label {
 
 .remote-work-article-modal > button[aria-label="Close project"]:hover,
 .remote-work-article-modal > button[aria-label="Close project"]:focus-visible {
-  border-color: rgb(0 79 192 / 35%);
-  background: rgb(255 255 255 / 96%);
-  color: #004fc0;
+  border-color: rgb(0 79 192 / 35%) !important;
+  background: rgb(255 255 255 / 96%) !important;
+  color: #004fc0 !important;
 }
 
 .remote-work-article {
@@ -10466,9 +10640,9 @@ body.album-archive-active .earth-preload-label {
 
 .mobile-fintech-article-modal > button[aria-label="Close project"] {
   z-index: 80;
-  border: 1px solid rgb(139 113 104 / 28%);
-  background: rgb(251 249 248 / 88%);
-  color: #212121;
+  border: 1px solid rgb(139 113 104 / 28%) !important;
+  background: rgb(251 249 248 / 88%) !important;
+  color: #212121 !important;
   box-shadow: 0 10px 28px rgb(162 58 0 / 10%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -10476,9 +10650,9 @@ body.album-archive-active .earth-preload-label {
 
 .mobile-fintech-article-modal > button[aria-label="Close project"]:hover,
 .mobile-fintech-article-modal > button[aria-label="Close project"]:focus-visible {
-  border-color: rgb(209 90 34 / 46%);
-  background: rgb(251 249 248 / 96%);
-  color: #a23a00;
+  border-color: rgb(209 90 34 / 46%) !important;
+  background: rgb(251 249 248 / 96%) !important;
+  color: #a23a00 !important;
 }
 
 .mobile-fintech-article {
@@ -11119,9 +11293,9 @@ body.album-archive-active .earth-preload-label {
 
 .tech-revives-article-modal > button[aria-label="Close project"] {
   z-index: 80;
-  border: 1px solid rgb(137 114 107 / 24%);
-  background: rgb(252 249 243 / 88%);
-  color: #1c1c18;
+  border: 1px solid rgb(137 114 107 / 24%) !important;
+  background: rgb(252 249 243 / 88%) !important;
+  color: #1c1c18 !important;
   box-shadow: 0 10px 28px rgb(155 64 31 / 10%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -11129,9 +11303,9 @@ body.album-archive-active .earth-preload-label {
 
 .tech-revives-article-modal > button[aria-label="Close project"]:hover,
 .tech-revives-article-modal > button[aria-label="Close project"]:focus-visible {
-  border-color: rgb(155 64 31 / 42%);
-  background: rgb(252 249 243 / 96%);
-  color: #9b401f;
+  border-color: rgb(155 64 31 / 42%) !important;
+  background: rgb(252 249 243 / 96%) !important;
+  color: #9b401f !important;
 }
 
 .tech-revives-article {
@@ -11983,16 +12157,16 @@ body.album-archive-active .earth-preload-label {
   z-index: 90;
   min-width: 44px;
   min-height: 44px;
-  border: 2px solid #000000;
-  background: #ff535b;
-  color: #000000;
+  border: 2px solid #000000 !important;
+  background: #ff535b !important;
+  color: #000000 !important;
   box-shadow: 4px 4px 0 #000000;
 }
 
 .global-streaming-culture-article-modal > button[aria-label="Close project"]:hover,
 .global-streaming-culture-article-modal > button[aria-label="Close project"]:focus-visible {
-  background: #4cd6fb;
-  color: #000000;
+  background: #4cd6fb !important;
+  color: #000000 !important;
   transform: translate(-2px, -2px);
   box-shadow: 6px 6px 0 #000000;
 }
@@ -12962,9 +13136,9 @@ body.album-archive-active .earth-preload-label {
   z-index: 92;
   min-width: 44px;
   min-height: 44px;
-  border: 2px solid #1b1c1c;
-  background: rgb(251 249 248 / 92%);
-  color: #1b1c1c;
+  border: 2px solid #1b1c1c !important;
+  background: rgb(251 249 248 / 92%) !important;
+  color: #1b1c1c !important;
   box-shadow: 4px 4px 0 #1b1c1c;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -12972,8 +13146,8 @@ body.album-archive-active .earth-preload-label {
 
 .multilateralism-vaccines-article-modal > button[aria-label="Close project"]:hover,
 .multilateralism-vaccines-article-modal > button[aria-label="Close project"]:focus-visible {
-  background: #00328a;
-  color: #ffffff;
+  background: #00328a !important;
+  color: #ffffff !important;
   transform: translate(-2px, -2px);
   box-shadow: 6px 6px 0 #1b1c1c;
 }
@@ -16466,4 +16640,21 @@ body.album-archive-active .earth-preload-label {
   animation: none;
   transition: none;
   transform: none;
+}
+
+/* Specific styling for the Ripple Economy game modal close button to make it visible on a light background */
+.projects-game-ripple-economy-modal > button[aria-label="Close project"] {
+  border: 1px solid #0f2e4c !important;
+  background: rgb(244 251 255 / 92%) !important;
+  color: #0f2e4c !important;
+  box-shadow: 0 4px 12px rgb(11 55 95 / 12%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.projects-game-ripple-economy-modal > button[aria-label="Close project"]:hover,
+.projects-game-ripple-economy-modal > button[aria-label="Close project"]:focus-visible {
+  border-color: #0f2e4c !important;
+  background: #0f2e4c !important;
+  color: #ffffff !important;
 }

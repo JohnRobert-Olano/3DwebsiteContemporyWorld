@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const heroImage = {
   src: '/article_assets/ai-global-healthcare/hero.png',
@@ -76,35 +76,7 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
-function getHighlightParts(text, query) {
-  const trimmed = query.trim();
-  if (!trimmed || trimmed.length < 2) return [text];
-  const regex = new RegExp(`(${escapeRegExp(trimmed)})`, 'gi');
-  return text.split(regex).filter(Boolean);
-}
-
-function HighlightedText({ text, query }) {
-  const parts = getHighlightParts(text, query);
-  const lowerQuery = query.trim().toLowerCase();
-
-  return (
-    <>
-      {parts.map((part, index) =>
-        lowerQuery && part.toLowerCase() === lowerQuery ? (
-          <mark className="ai-global-healthcare-article__search-highlight" key={`${part}-${index}`}>
-            {part}
-          </mark>
-        ) : (
-          <span key={`${part}-${index}`}>{part}</span>
-        ),
-      )}
-    </>
-  );
-}
 
 function Icon({ name, className = 'ai-global-healthcare-article__icon' }) {
   const paths = {
@@ -136,52 +108,10 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
   const scrollRef = useRef(null);
   const sectionRefs = useRef({});
   const progressFrameRef = useRef(0);
-  const focusReturnRef = useRef(null);
-  const focusTimerRef = useRef(0);
-  const toastTimerRef = useRef(0);
-  const searchInputRef = useRef(null);
-  const subscribeNameRef = useRef(null);
-  const shareUrlRef = useRef(null);
 
   const [progress, setProgress] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('overview');
-  const [activeModal, setActiveModal] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [bookmarked, setBookmarked] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [copyState, setCopyState] = useState('idle');
-  const [subscribeName, setSubscribeName] = useState('');
-  const [subscribeEmail, setSubscribeEmail] = useState('');
-  const [subscribeStatus, setSubscribeStatus] = useState('idle');
-
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : 'https://clinicalai.example/ai-global-healthcare';
-  const encodedShareUrl = encodeURIComponent(shareUrl);
-  const encodedShareText = encodeURIComponent('Bridging the 4.5 Billion Gap: How AI is Rewriting Global Healthcare');
-
-  const showToast = useCallback((message, variant = 'info') => {
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    setToast({ message, variant });
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 2500);
-  }, []);
-
-  const closeModal = useCallback(() => {
-    setActiveModal(null);
-    setCopyState('idle');
-
-    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
-    focusTimerRef.current = window.setTimeout(() => {
-      focusReturnRef.current?.focus();
-      focusReturnRef.current = null;
-    }, 0);
-  }, []);
-
-  const openModal = useCallback((modal, event) => {
-    focusReturnRef.current = event?.currentTarget ?? null;
-    setCopyState('idle');
-    setSubscribeStatus('idle');
-    setActiveModal(modal);
-  }, []);
 
   const setSectionRef = useCallback(
     (id) => (node) => {
@@ -260,32 +190,8 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
     return () => observer.disconnect();
   }, [reducedMotion]);
 
-  useEffect(() => {
-    if (!activeModal) return undefined;
-
-    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
-    focusTimerRef.current = window.setTimeout(() => {
-      if (activeModal === 'search') searchInputRef.current?.focus();
-      if (activeModal === 'subscribe') subscribeNameRef.current?.focus();
-      if (activeModal === 'share') shareUrlRef.current?.focus();
-    }, 0);
-
-    const handleKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      closeModal();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [activeModal, closeModal]);
-
   useEffect(
     () => () => {
-      if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
-      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
       if (progressFrameRef.current) cancelAnimationFrame(progressFrameRef.current);
     },
     [],
@@ -327,62 +233,7 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
     event.currentTarget.style.removeProperty('--mouse-y');
   }, []);
 
-  const toggleBookmark = useCallback(() => {
-    setBookmarked((current) => {
-      const next = !current;
-      showToast(next ? 'Article bookmarked' : 'Bookmark removed', next ? 'primary' : 'muted');
-      return next;
-    });
-  }, [showToast]);
-
-  const copyShareUrl = useCallback(async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-      } else {
-        shareUrlRef.current?.select();
-        document.execCommand('copy');
-      }
-      setCopyState('copied');
-      showToast('Article link copied', 'primary');
-    } catch {
-      setCopyState('manual');
-      shareUrlRef.current?.select();
-      showToast('Copy the selected link manually', 'muted');
-    }
-  }, [shareUrl, showToast]);
-
-  const submitSubscribe = useCallback(
-    (event) => {
-      event.preventDefault();
-      setSubscribeStatus('confirmed');
-      showToast('Subscription saved locally', 'primary');
-    },
-    [showToast],
-  );
-
-  const highlighted = useCallback(
-    (text) => <HighlightedText text={text} query={searchQuery} />,
-    [searchQuery],
-  );
-
-  const searchCount = useMemo(() => {
-    const term = searchQuery.trim().toLowerCase();
-    if (term.length < 2) return 0;
-    const searchable = [
-      overview.text,
-      articleCopy.capabilitiesLead,
-      articleCopy.pullquote,
-      articleCopy.capabilitiesBodyBefore,
-      articleCopy.capabilitiesBodyEmphasis,
-      articleCopy.capabilitiesBodyAfter,
-      articleCopy.economicsOne,
-      articleCopy.economicsTwo,
-      articleCopy.future,
-      ...diagnosticCards.flatMap((card) => [card.title, card.description]),
-    ].join(' ');
-    return searchable.toLowerCase().split(term).length - 1;
-  }, [searchQuery]);
+  const highlighted = useCallback((text) => text, []);
 
   return (
     <article
@@ -419,31 +270,6 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
                 </button>
               ))}
             </nav>
-
-            <div className="ai-global-healthcare-article__nav-controls">
-              <button type="button" aria-label="Search article" onClick={(event) => openModal('search', event)}>
-                <Icon name="search" />
-              </button>
-              <button
-                type="button"
-                aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark article'}
-                aria-pressed={bookmarked}
-                className={bookmarked ? 'is-active' : undefined}
-                onClick={toggleBookmark}
-              >
-                <Icon name="bookmark" />
-              </button>
-              <button type="button" aria-label="Share article" onClick={(event) => openModal('share', event)}>
-                <Icon name="share" />
-              </button>
-              <button
-                type="button"
-                className="ai-global-healthcare-article__nav-subscribe"
-                onClick={(event) => openModal('subscribe', event)}
-              >
-                Subscribe
-              </button>
-            </div>
           </div>
         </header>
 
@@ -493,13 +319,7 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
                   ))}
                 </div>
 
-                <button
-                  type="button"
-                  className="ai-global-healthcare-article__subscribe-button"
-                  onClick={(event) => openModal('subscribe', event)}
-                >
-                  Subscribe to Insights
-                </button>
+
               </div>
 
               <div
@@ -542,7 +362,7 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
                 data-ai-healthcare-reveal
               >
                 <p>
-                  <HighlightedText text={articleCopy.capabilitiesLead} query={searchQuery} />
+                  {articleCopy.capabilitiesLead}
                 </p>
 
                 <figure className="ai-global-healthcare-article__pullquote">
@@ -601,133 +421,6 @@ export default function AIGlobalHealthcareArticle({ project, reducedMotion = fal
           <p>{articleMeta.footer}</p>
         </footer>
       </div>
-
-      {activeModal ? (
-        <div
-          className="ai-global-healthcare-article__modal-backdrop"
-          role="presentation"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) closeModal();
-          }}
-        >
-          {activeModal === 'search' ? (
-            <section className="ai-global-healthcare-article__modal" role="dialog" aria-modal="true" aria-label="Search article">
-              <div className="ai-global-healthcare-article__modal-header">
-                <h2>Search ClinicalAI</h2>
-                <button type="button" aria-label="Close search" onClick={closeModal}>
-                  <Icon name="close" />
-                </button>
-              </div>
-              <label className="ai-global-healthcare-article__search-field" htmlFor="ai-healthcare-search">
-                <Icon name="search" />
-                <input
-                  ref={searchInputRef}
-                  id="ai-healthcare-search"
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search healthcare, AI, scans..."
-                />
-              </label>
-              <p className="ai-global-healthcare-article__modal-note">
-                {searchQuery.trim().length < 2
-                  ? 'Type at least two characters to highlight article matches.'
-                  : `${searchCount} article match${searchCount === 1 ? '' : 'es'} highlighted.`}
-              </p>
-              {searchQuery ? (
-                <button type="button" className="ai-global-healthcare-article__secondary-action" onClick={() => setSearchQuery('')}>
-                  Clear Search
-                </button>
-              ) : null}
-            </section>
-          ) : null}
-
-          {activeModal === 'share' ? (
-            <section className="ai-global-healthcare-article__modal" role="dialog" aria-modal="true" aria-label="Share article">
-              <div className="ai-global-healthcare-article__modal-header">
-                <h2>Share Article</h2>
-                <button type="button" aria-label="Close share modal" onClick={closeModal}>
-                  <Icon name="close" />
-                </button>
-              </div>
-              <div className="ai-global-healthcare-article__copy-row">
-                <input ref={shareUrlRef} readOnly value={shareUrl} aria-label="Article URL" />
-                <button type="button" onClick={copyShareUrl}>
-                  <Icon name="copy" />
-                  <span>{copyState === 'copied' ? 'Copied' : copyState === 'manual' ? 'Select' : 'Copy'}</span>
-                </button>
-              </div>
-              <div className="ai-global-healthcare-article__share-grid">
-                <a href={`https://twitter.com/intent/tweet?url=${encodedShareUrl}&text=${encodedShareText}`} target="_blank" rel="noopener noreferrer">
-                  <Icon name="chat" />
-                  <span>Twitter</span>
-                </a>
-                <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedShareUrl}`} target="_blank" rel="noopener noreferrer">
-                  <Icon name="group" />
-                  <span>LinkedIn</span>
-                </a>
-                <a href={`mailto:?subject=${encodedShareText}&body=Read this article: ${encodedShareUrl}`}>
-                  <Icon name="mail" />
-                  <span>Email</span>
-                </a>
-              </div>
-            </section>
-          ) : null}
-
-          {activeModal === 'subscribe' ? (
-            <section
-              className="ai-global-healthcare-article__modal"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="ai-healthcare-subscribe-title"
-            >
-              <div className="ai-global-healthcare-article__modal-header">
-                <h2 id="ai-healthcare-subscribe-title">Subscribe to Insights</h2>
-                <button type="button" aria-label="Close subscribe modal" onClick={closeModal}>
-                  <Icon name="close" />
-                </button>
-              </div>
-              {subscribeStatus === 'confirmed' ? (
-                <div className="ai-global-healthcare-article__confirmation" role="status">
-                  <strong>Thank you, {subscribeName || 'reader'}.</strong>
-                  <p>This mock subscription was confirmed locally. No data was sent.</p>
-                </div>
-              ) : (
-                <form className="ai-global-healthcare-article__subscribe-form" onSubmit={submitSubscribe}>
-                  <label htmlFor="ai-healthcare-subscribe-name">Full Name</label>
-                  <input
-                    ref={subscribeNameRef}
-                    id="ai-healthcare-subscribe-name"
-                    type="text"
-                    required
-                    value={subscribeName}
-                    onChange={(event) => setSubscribeName(event.target.value)}
-                    placeholder="Dr. Evelyn Chase"
-                  />
-                  <label htmlFor="ai-healthcare-subscribe-email">Email Address</label>
-                  <input
-                    id="ai-healthcare-subscribe-email"
-                    type="email"
-                    required
-                    value={subscribeEmail}
-                    onChange={(event) => setSubscribeEmail(event.target.value)}
-                    placeholder="evelyn@clinicalai.org"
-                  />
-                  <button type="submit" className="ai-global-healthcare-article__primary-action">
-                    Verify & Subscribe
-                  </button>
-                </form>
-              )}
-            </section>
-          ) : null}
-        </div>
-      ) : null}
-
-      {toast ? (
-        <div className={`ai-global-healthcare-article__toast ai-global-healthcare-article__toast--${toast.variant}`} role="status">
-          {toast.message}
-        </div>
-      ) : null}
     </article>
   );
 }

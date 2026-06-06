@@ -563,20 +563,6 @@ export default function GlobalInflationArticle({ project, reducedMotion = false 
                   will simply become the norm.
                 </p>
               </div>
-
-              <div className="global-inflation-article__sources" id="sources">
-                <h3>Primary Source Reports</h3>
-                <ul>
-                  {sources.map((source) => (
-                    <li key={source.id}>
-                      <a href={source.href} target="_blank" rel="noopener noreferrer">
-                        <SourceIcon type={source.icon} />
-                        <span>{source.title}</span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </section>
           </div>
         </main>

@@ -81,6 +81,14 @@ function GlobeExitStreaks() {
 // panels in Content drive it through `globe-reveal` window events rather than
 // rendering the title themselves (they live above the globe and couldn't sit
 // behind it). The exit streaks sit behind the title within this same layer.
+//
+// For texts in OUTLINE_REVEAL_TEXTS a second overlay layer is rendered at a
+// higher z-index (above the Cesium canvas). It uses the same GlobeWordReveal
+// component in `outline` mode — stroke-only, transparent fill — so the letters
+// that the Earth disc covers still peek through as an outline on top, exactly
+// like the OLANO / Spider-Man reference effect.
+const OUTLINE_REVEAL_TEXTS = new Set(['Historical Epochs', 'Globalization']);
+
 export default function GlobeBackdrop() {
   const [reveal, setReveal] = useState({ text: '', active: false });
 
@@ -99,12 +107,32 @@ export default function GlobeBackdrop() {
     return () => window.removeEventListener('globe-reveal', onReveal);
   }, []);
 
+  const showOutline = reveal.text && OUTLINE_REVEAL_TEXTS.has(reveal.text);
+
   return (
-    <div className="pointer-events-none fixed inset-0 z-0" aria-hidden={!reveal.active}>
-      <GlobeExitStreaks />
-      {reveal.text && (
-        <GlobeWordReveal text={reveal.text} active={reveal.active} reducedMotion={reducedMotion} />
+    <>
+      {/* ── Solid-fill layer — sits BEHIND the transparent Cesium canvas ── */}
+      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden={!reveal.active}>
+        <GlobeExitStreaks />
+        {reveal.text && (
+          <GlobeWordReveal text={reveal.text} active={reveal.active} reducedMotion={reducedMotion} />
+        )}
+      </div>
+
+      {/* ── Outline-only layer — sits ABOVE the Cesium canvas (z-[5]) ────
+          Same text rendered as stroke-only / transparent fill. Where the Earth
+          disc covers the solid text below, the outline peeks through on top —
+          the OLANO / Spider-Man dual-layer technique. */}
+      {showOutline && (
+        <div className="pointer-events-none fixed inset-0 z-[5]" aria-hidden="true">
+          <GlobeWordReveal
+            text={reveal.text}
+            active={reveal.active}
+            reducedMotion={reducedMotion}
+            outline
+          />
+        </div>
       )}
-    </div>
+    </>
   );
 }

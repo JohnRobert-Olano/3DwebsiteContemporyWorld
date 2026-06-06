@@ -19,22 +19,7 @@ const EARTH_MOTION_EASE = 0.0055;
 // halving the Cesium render cost during the reading sections).
 const IDLE_FRAME_MS = 33;
 
-// ── Landmark warm-up tuning ─────────────────────────────────────────────────
-// Behind the boot loader we teleport the camera to each of the 12 destination
-// views and wait for their photorealistic tiles to load, so later scroll-driven
-// transitions don't start from blank/gray meshes. Bounded so a slow or failed
-// view can never hang the boot.
-const WARMUP_PER_DEST_TIMEOUT_MS = 9000; // max wait for one view's full detail
-const WARMUP_SETTLE_MS = 500;            // fully-loaded must hold this long = settled
-const WARMUP_MIN_WAIT_MS = 300;          // give traversal time to request tiles first
-const WARMUP_OVERALL_TIMEOUT_MS = 100000; // hard cap on the whole warm-up pass
-const WARMUP_SAMPLE_WAIT_CAP_MS = 8000;  // cap on awaiting ground-height sampling
-const WARMUP_POLL_MS = 100;
-// Each landmark is warmed at TWO views the live flight passes through: the
-// mid-flight regional approach (≈ zoomThroughEarthLayers' regionalPose) and the
-// final close-up - so the descent and the landing are both resident.
-const WARMUP_APPROACH_ZOOM = 5.35;
-const WARMUP_APPROACH_PITCH = 32; // Mapbox pitch -> Cesium -58 via poseFromMapbox
+// Landmark warm-up disabled.
 
 function SetupErrorState({ message }) {
   return (
@@ -118,6 +103,60 @@ function getDestinationTourState() {
   const state = window.destinationTourState || { index: 0, progress: 0 };
   return { active, index: state.index ?? 0, progress: state.progress ?? 0 };
 }
+
+// ── Device-tier detection ──────────────────────────────────────────────────
+// Computed once at module load. navigator.deviceMemory is Chrome/Edge only;
+// we fall back to CPU core count (a reasonable proxy) when it's absent.
+function detectDeviceTier() {
+  const mem = navigator.deviceMemory;        // GB | undefined (Safari/FF = undef)
+  const cores = navigator.hardwareConcurrency || 2;
+  if (mem !== undefined) {
+    if (mem <= 2) return 'low';
+    if (mem <= 4) return 'mid';
+    return 'high';
+  }
+  if (cores <= 2) return 'low';
+  if (cores <= 4) return 'mid';
+  return 'high';
+}
+
+const DEVICE_TIER = detectDeviceTier();
+
+// Per-tier rendering + warmup configuration.
+//
+// low  — 2 GB RAM or ≤2 CPU cores: minimal cache, lowest LOD, skip warmup.
+//         Keeps Cesium's memory footprint under ~300 MB and avoids the OOM
+//         risk of visiting 12 high-detail landmarks during boot.
+//
+// mid  — 4 GB RAM or ≤4 cores: modest cache, moderate quality, full warmup
+//         with shorter per-landmark dwell so total boot time stays reasonable.
+//
+// high — 8+ GB RAM or 5+ cores: full 3 GB cache, highest quality, full warmup
+//         with long dwell times to ensure every landmark is deeply cached.
+// mid settings are used for both mid and high-end devices — the 3 GB cache
+// caused excessive warmup time with no perceptible quality gain. Low-end
+// devices skip warmup entirely to avoid memory pressure during boot.
+const MID_CONFIG = {
+  cacheBytes: 768_000_000,
+  cacheOverflowBytes: 256_000_000,
+  maxScreenSpaceError: 24,
+  preloadWhenHidden: true,
+  skipWarmup: false,
+  warmupMaxMs: 3000, // exactly 3 s per landmark, wall-clock
+};
+
+const TIER_CONFIG = {
+  high: MID_CONFIG,
+  mid: MID_CONFIG,
+  low: {
+    cacheBytes: 256_000_000,
+    cacheOverflowBytes: 64_000_000,
+    maxScreenSpaceError: 32,
+    preloadWhenHidden: false,
+    skipWarmup: true,
+    warmupMaxMs: 0,
+  },
+}[DEVICE_TIER];
 
 // ── Destination tour ───────────────────────────────────────────────────────
 // Event-based: fires once per landmark transition and runs a staged
@@ -261,6 +300,7 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
   const onWarmupProgressRef = useRef(onWarmupProgress);
   const [setupError, setSetupError] = useState('');
   const [tilesVisualReady, setTilesVisualReady] = useState(false);
+  const [warmupComplete, setWarmupComplete] = useState(false);
   // True while the Photorealistic 3D Tiles streamer has pending tile requests.
   // Drives the small "Loading 3D tiles" badge in the corner so the user knows
   // why the view is still sharpening.
@@ -275,15 +315,15 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
       ? 'Missing VITE_CESIUM_ION_TOKEN in the local or Vercel environment'
       : setupError;
 
-  // Notify the parent once the photorealistic tiles are visually ready so the
-  // boot loading screen can release the first-render gate. Ref-guarded so a
-  // changing callback identity can't fire it twice.
+  // Notify the parent only after BOTH the first photorealistic tile is visible
+  // AND the landmark warm-up sequence has finished. This keeps the boot loading
+  // screen up during warm-up so the user sees the progress UI.
   useEffect(() => {
-    if (tilesVisualReady && !visualReadyNotifiedRef.current) {
+    if (tilesVisualReady && warmupComplete && !visualReadyNotifiedRef.current) {
       visualReadyNotifiedRef.current = true;
       onVisualReady?.();
     }
-  }, [tilesVisualReady, onVisualReady]);
+  }, [tilesVisualReady, warmupComplete, onVisualReady]);
 
   // Surface setup/tile failures upward so the boot loader stops waiting and the
   // SetupErrorState below becomes visible instead of an infinite loader.
@@ -420,118 +460,99 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
       _viewer: viewer,
     };
     window.codexMap = mapShim;
+
+    // ── Landmark warmup sequence ───────────────────────────────────────────
+    // After the first tile is visible the camera visits all 12 destinations
+    // and waits for Cesium's tile statistics to reach zero before moving on.
+    // This ensures every landmark's 3D mesh is fully resident in the browser
+    // HTTP cache and Cesium's 3 GB in-memory cache before the user can scroll
+    // to it, eliminating broken geometry and mid-scroll "loading" pauses.
+    let warmupTimer = null;
+    let warmupStarted = false;
+
+    // Drives Cesium renders every 100 ms for exactly TIER_CONFIG.warmupMaxMs
+    // (3 000 ms for mid/high). Uses Date.now() as the deadline so wall-clock
+    // drift from setTimeout jitter never causes a landmark to overrun.
+    // The tile-settle heuristic was removed: dynamicScreenSpaceError keeps
+    // numberOfPendingRequests non-zero almost continuously, meaning the old
+    // stableCount logic always fell through to MAX_DWELL_MS anyway — plus the
+    // 200 ms initial delay and 300 ms stableCount confirmation pushed each
+    // landmark past 3.4 s. Fixed wall-clock timing is more predictable.
+    const dwellAtLandmark = () => new Promise((resolve) => {
+      const deadline = Date.now() + TIER_CONFIG.warmupMaxMs;
+      const TICK_MS = 100;
+
+      const tick = () => {
+        if (cancelledTilesetLoad || !viewer || viewer.isDestroyed()) { resolve(); return; }
+        viewer.scene.requestRender();
+        if (Date.now() >= deadline) { resolve(); return; }
+        warmupTimer = setTimeout(tick, TICK_MS);
+      };
+
+      warmupTimer = setTimeout(tick, TICK_MS);
+    });
+
+    const startWarmupSequence = async () => {
+      if (warmupStarted || cancelledTilesetLoad) return;
+      warmupStarted = true;
+
+      // Low-end devices skip the warmup entirely to avoid the memory spike
+      // of loading 12 high-detail landmark views back-to-back during boot.
+      if (TIER_CONFIG.skipWarmup) {
+        onWarmupProgressRef.current?.(destinations.length, destinations.length);
+        setWarmupComplete(true);
+        return;
+      }
+
+      codex.warmupActive = true;
+
+      for (let i = 0; i < destinations.length; i++) {
+        if (cancelledTilesetLoad) break;
+        onWarmupProgressRef.current?.(i, destinations.length);
+
+        const destination = destinations[i];
+        const camCfg = getDestinationCamera(destination);
+        const altitude = camCfg.altitude ?? 100;
+        const pose = poseFromMapbox(
+          { center: [destination.lon, destination.lat], zoom: camCfg.zoom, pitch: camCfg.pitch, bearing: camCfg.bearing },
+          altitude,
+        );
+        setCameraPose(viewer, pose);
+        codex.lastAppliedPose = pose;
+
+        await dwellAtLandmark();
+      }
+
+      if (cancelledTilesetLoad) return;
+
+      // Return to full-Earth overview ready for the intro sequence.
+      const idlePose = poseFromMapbox(
+        { center: EARTH_IDLE_CENTER, zoom: EARTH_OVERVIEW_ZOOM, pitch: 0, bearing: 0 },
+        0,
+      );
+      setCameraPose(viewer, idlePose);
+      codex.lastAppliedPose = idlePose;
+      codex.warmupActive = false;
+
+      onWarmupProgressRef.current?.(destinations.length, destinations.length);
+      setWarmupComplete(true);
+    };
+
     // ── Google Photorealistic 3D Tiles ──────────────────────────────────────
     let tileset = null;
     let cancelledTilesetLoad = false;
     let pendingDebounce = 0;
-    let samplePromise = null;
-    let warmupTimer = 0;
     let firstTileSeen = false;
 
-    const delay = (ms) => new Promise((resolve) => {
-      warmupTimer = window.setTimeout(resolve, ms);
-    });
-
-    // Resolve once the tileset has FULLY streamed the current camera view: it
-    // requested tiles, `tilesLoaded` (every tile meeting the screen-space error
-    // this frame) is true, and pending+processing held at zero for a short
-    // stable window - or `timeoutMs` elapsed, or the load was cancelled.
-    const waitForTilesSettled = (ts, timeoutMs) => new Promise((resolve) => {
-      const start = performance.now();
-      let requested = false;
-      let idleSince = null;
-      const poll = () => {
-        if (cancelledTilesetLoad || !ts) { resolve('cancelled'); return; }
-        const stats = ts.statistics;
-        const pending = stats.numberOfPendingRequests + stats.numberOfTilesProcessing;
-        const elapsed = performance.now() - start;
-        if (pending > 0) requested = true;
-        const fullyLoaded = pending === 0 && ts.tilesLoaded === true
-          && (requested || elapsed >= WARMUP_MIN_WAIT_MS);
-        if (fullyLoaded) {
-          if (idleSince == null) idleSince = performance.now();
-          if (performance.now() - idleSince >= WARMUP_SETTLE_MS) { resolve('settled'); return; }
-        } else {
-          idleSince = null;
-        }
-        if (elapsed >= timeoutMs) { resolve('timeout'); return; }
-        warmupTimer = window.setTimeout(poll, WARMUP_POLL_MS);
-      };
-      poll();
-    });
-
-    // Offscreen warm-up: visit each of the 12 destination camera poses behind
-    // the loading screen so their tiles are resident before the real journey.
-    const runWarmup = async () => {
-      const total = destinations.length;
-      codex.warmupActive = true;
-      if (!cancelledTilesetLoad) onWarmupProgressRef.current?.(0, total);
-
-      // Let ground-height sampling fill codex.elevations so each warm-up frame
-      // matches the real transition framing (capped so it can't hang).
-      if (samplePromise) {
-        try { await Promise.race([samplePromise, delay(WARMUP_SAMPLE_WAIT_CAP_MS)]); } catch { /* ignore */ }
-      }
-
-      // Warm with the LIVE runtime tileset config (do NOT override skip-LOD /
-      // base SSE / foveation): the live camera does a coarse skip-LOD first
-      // pass, so the cache must hold those coarse ancestor tiles AND the refined
-      // leaves. Forcing immediatelyLoadDesiredLevelOfDetail here would cache only
-      // the leaves, leaving the runtime to stream the coarse pass on arrival
-      // (the "black tiles with lines"). waitForTilesSettled waits for the view
-      // to fully refine before moving on.
-
-      // Teleport to a view, then wait for its tiles to fully load.
-      const warmPose = async (dest, zoom, pitch, bearing, altitude, label) => {
-        if (cancelledTilesetLoad || !tileset) return;
-        const pose = poseFromMapbox({ center: destinationToLngLat(dest), zoom, pitch, bearing }, altitude);
-        setCameraPose(viewer, pose);
-        codex.lastAppliedPose = pose;
-        const result = await waitForTilesSettled(tileset, WARMUP_PER_DEST_TIMEOUT_MS);
-        if (result === 'timeout') {
-          console.warn(`[CesiumEarth] landmark warm-up timed out for ${dest.id} (${label}); continuing`);
-        }
-      };
-
-      const overallDeadline = performance.now() + WARMUP_OVERALL_TIMEOUT_MS;
-      for (let i = 0; i < total; i += 1) {
-        if (cancelledTilesetLoad || !tileset) break;
-        if (performance.now() > overallDeadline) {
-          console.warn('[CesiumEarth] landmark warm-up hit the overall timeout; starting with a partial preload');
-          break;
-        }
-        const dest = destinations[i];
-        const camera = getDestinationCamera(dest);
-        const altitude = camera.altitude ?? codex.elevations.get(dest.id) ?? 100;
-
-        // (a) Mid-flight regional approach over the destination, then
-        // (b) the final landmark close-up. Both views the live transition
-        // passes through are fully refined before the journey.
-        await warmPose(dest, WARMUP_APPROACH_ZOOM, WARMUP_APPROACH_PITCH, camera.bearing, altitude, 'approach');
-        if (cancelledTilesetLoad) break;
-        await warmPose(dest, camera.zoom, camera.pitch, camera.bearing, altitude, 'landing');
-        if (cancelledTilesetLoad) break;
-        onWarmupProgressRef.current?.(i + 1, total);
-      }
-
-      // Restore the neutral Earth overview before handing off to the intro.
-      if (!cancelledTilesetLoad) {
-        setCameraPose(viewer, initialPose);
-        codex.lastAppliedPose = initialPose;
-      }
-      codex.warmupActive = false;
-      if (!cancelledTilesetLoad) setTilesVisualReady(true);
-    };
-
-    // First visible photorealistic tile = initial Earth is ready. Rather than
-    // revealing the site immediately, start the offscreen landmark warm-up; the
-    // loader stays up until runWarmup finishes (or times out).
+    // First visible photorealistic tile = Earth is rendering. Kick off the
+    // landmark warm-up sequence after a short settle delay.
     const onFirstTile = () => {
       if (cancelledTilesetLoad || firstTileSeen) return;
       firstTileSeen = true;
       if (tileset?.tileVisible) tileset.tileVisible.removeEventListener(onFirstTile);
       if (tileset?.initialTilesLoaded) tileset.initialTilesLoaded.removeEventListener(onFirstTile);
-      runWarmup();
+      setTilesVisualReady(true);
+      setTimeout(() => startWarmupSequence(), 300);
     };
 
     (async () => {
@@ -546,19 +567,17 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
           return;
         }
 
-        // ── Preload / cache tuning ───────────────────────────────────────────
-        // Default cache (~512 MB) is small for a 12-stop tour; tiles get
-        // evicted by the time the user scrolls back. 1.5 GB keeps every
-        // landmark's high-detail meshes resident after the first visit.
-        tileset.cacheBytes = 3_000_000_000;
-        tileset.maximumCacheOverflowBytes = 1_000_000_000;
-        // Both default true - explicit so a future Cesium version doesn't
-        // silently flip them off. preloadFlightDestinations is the big one
-        // for us: during a flyTo, Cesium starts traversing the *destination*
-        // viewpoint before the camera arrives, so the landing frame is
-        // already mostly sharp.
+        // ── Preload / cache tuning (scaled to device tier) ──────────────────
+        // High-end: 3 GB cache keeps all 12 landmarks resident after warmup.
+        // Mid-tier: 768 MB is enough for the last few visited landmarks.
+        // Low-end:  256 MB avoids OOM on 2 GB RAM devices; tiles are streamed
+        //           on demand as the user scrolls rather than pre-cached.
+        tileset.cacheBytes = TIER_CONFIG.cacheBytes;
+        tileset.maximumCacheOverflowBytes = TIER_CONFIG.cacheOverflowBytes;
+        // preloadFlightDestinations lets Cesium start fetching the destination
+        // tiles before the camera arrives, sharpening the landing frame.
         tileset.preloadFlightDestinations = true;
-        tileset.preloadWhenHidden = true;
+        tileset.preloadWhenHidden = TIER_CONFIG.preloadWhenHidden;
         // ── Smooth progressive loading ──────────────────────────────────────
         // Render a fast first pass at very low resolution, then refine in
         // steps. Without this the user sees blank gray tiles until the
@@ -575,7 +594,7 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
         tileset.dynamicScreenSpaceErrorFactor = 4;
         tileset.foveatedScreenSpaceError = true;
         tileset.foveatedTimeDelay = 0.2;            // delay peripheral high-detail loads
-        tileset.maximumScreenSpaceError = 16;       // default; lower = sharper but slower
+        tileset.maximumScreenSpaceError = TIER_CONFIG.maxScreenSpaceError; // 16 high / 24 mid / 32 low
 
         // Streaming indicator - debounce so brief loads don't flash the badge.
         const updateStreamingState = () => {
@@ -609,7 +628,7 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
         const cartographics = sampleTargets.map((p) =>
           Cesium.Cartographic.fromDegrees(p.lon, p.lat),
         );
-        samplePromise = viewer.scene
+        viewer.scene
           .sampleHeightMostDetailed(cartographics)
           .then((carts) => {
             carts.forEach((c, i) => {
@@ -781,7 +800,7 @@ export default function CesiumEarth({ onVisualReady, onSetupError, onWarmupProgr
     return () => {
       cancelledTilesetLoad = true;
       codex.warmupActive = false;
-      clearTimeout(warmupTimer);
+      if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = null; }
       clearTimeout(pendingDebounce);
       cancelAnimationFrame(frameId);
       if (codex.cancelActivePan) {

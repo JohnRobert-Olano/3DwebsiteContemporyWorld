@@ -396,9 +396,7 @@ export default function GlobalDebtArticle({ project, reducedMotion = false }) {
                     </li>
                   ))}
                 </ul>
-                <button type="button" className="global-debt-article__button" onClick={openDownload}>
-                  DOWNLOAD FULL PDF
-                </button>
+
               </section>
 
               <section className="global-debt-article__bulletins" data-global-debt-reveal>
